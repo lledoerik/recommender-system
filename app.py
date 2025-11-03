@@ -465,7 +465,7 @@ if __name__ == '__main__':
             print(f"  - Producció: https://recomanador.hermes.cat")
             print("="*70 + "\n")
             
-            app.run(debug=False, host=host, port=port, use_reloader=False)
+            app.run(debug=True, host=host, port=port, use_reloader=False)
             
         except (KeyboardInterrupt, SystemExit):
             # Aturar el scheduler quan es tanca l'app

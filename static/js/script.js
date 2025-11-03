@@ -228,13 +228,14 @@ function displayResults(recommendations, animeName, rating) {
     }
 
     // Missatge diferent segons la valoració
+
     let message = '';
     if (rating >= 4) {
-        message = `${recommendations.length} animes similars a "${animeName}" (t'ha agradat: ${rating}/5)`;
+        message = `Animes similars a "${animeName}"`;
     } else if (rating <= 2) {
-        message = `${recommendations.length} alternatives diferents a "${animeName}" (no t'ha agradat: ${rating}/5)`;
+        message = `Alternatives diferents a "${animeName}"`;
     } else {
-        message = `${recommendations.length} animes recomanats basats en "${animeName}" (valoració neutral: ${rating}/5)`;
+        message = `Animes recomanats basats en "${animeName}"`;
     }
     
     resultsCount.textContent = message;
