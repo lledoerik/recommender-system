@@ -1,6 +1,6 @@
 """
-Aplicació Flask amb Sistema de Recomanacions d'Animes
-Inclou scheduler automàtic per entrenar el model cada dia a les 2:30 AM
+Flask Application with Anime Recommendation System
+Includes automatic scheduler to train model daily at 2:30 AM
 """
 
 from flask import Flask, request, jsonify, render_template
@@ -11,45 +11,45 @@ import sys
 import os
 import time
 
-# Afegir src/ al path per poder importar
+# Add src/ to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
 from src.recommendation_system import RecommendationSystem
 
-# APScheduler per tasques automàtiques
+# APScheduler for automatic tasks
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 
-# Configuració Flask
+# Flask configuration
 app = Flask(__name__, 
             static_folder='static',
             template_folder='templates')
 CORS(app)
-app.config["DEBUG"] = False  # Canviat a False per producció
+app.config["DEBUG"] = False
 app.config["PORT"] = 5000
 
-# Configuració de rutes
+# Path configuration
 DATA_DIR = Path(__file__).resolve().parent / 'data'
 ANIME_CSV = DATA_DIR / 'anime.csv'
 RATING_CSV = DATA_DIR / 'cleaned_data.csv'
 
 print("="*70)
-print("🚀 INICIALITZANT SISTEMA DE RECOMANACIONS")
+print("INITIALIZING RECOMMENDATION SYSTEM")
 print("="*70)
-print(f"\n📂 Cercant fitxers:")
+print(f"\nSearching for files:")
 print(f"  - {ANIME_CSV}")
 print(f"  - {RATING_CSV}")
 
-# Variable global pel sistema de recomanacions
+# Global variable for recommendation system
 rec_system = None
-training_in_progress = False  # Flag per saber si s'està entrenant
-last_model_check = None  # Per al model watcher
+training_in_progress = False
+last_model_check = None
 
 
 def initialize_system():
     """
-    Inicialitza el sistema de recomanacions
+    Initialize the recommendation system
     """
     global rec_system
     try:
@@ -57,14 +57,14 @@ def initialize_system():
             anime_csv_path=ANIME_CSV,
             rating_csv_path=RATING_CSV
         )
-        print("\n✅ Sistema carregat correctament!")
+        print("\nSystem loaded correctly!")
         return True
     except FileNotFoundError as e:
-        print(f"\n❌ ERROR: {str(e)}")
+        print(f"\nERROR: {str(e)}")
         print("\n" + "="*70)
         return False
     except Exception as e:
-        print(f"\n❌ ERROR INESPERAT: {str(e)}")
+        print(f"\nUNEXPECTED ERROR: {str(e)}")
         import traceback
         traceback.print_exc()
         print("\n" + "="*70)
@@ -73,8 +73,8 @@ def initialize_system():
 
 def check_for_new_models():
     """
-    Comprova si hi ha models nous disponibles i els carrega automàticament
-    S'executa cada 30 segons per detectar models entrenats manualment
+    Check if new models are available and load them automatically
+    Runs every 30 seconds to detect manually trained models
     """
     global rec_system, last_model_check
     
@@ -85,49 +85,49 @@ def check_for_new_models():
         latest_version = rec_system._get_latest_version()
         
         if latest_version > rec_system.current_model_version:
-            print(f"\n🔔 NOU MODEL DETECTAT: v{latest_version}")
-            print(f"   Model actual: v{rec_system.current_model_version}")
-            print(f"   Recarregant automàticament...")
+            print(f"\nNEW MODEL DETECTED: v{latest_version}")
+            print(f"   Current model: v{rec_system.current_model_version}")
+            print(f"   Reloading automatically...")
             
             if rec_system.reload_model():
-                print(f"✅ Model v{latest_version} carregat amb èxit!")
+                print(f"Model v{latest_version} loaded successfully!")
                 last_model_check = time.time()
             else:
-                print(f"⚠️  No s'ha pogut carregar el model v{latest_version}")
+                print(f"Could not load model v{latest_version}")
     except Exception as e:
-        pass  # Silenciosament ignorar errors en el watcher
+        pass
 
 
 def check_and_retrain():
     """
-    Comprova si les dades han canviat i reentrena el model si cal
-    Aquesta funció s'executa cada dia a les 2:30 AM
+    Check if data has changed and retrain model if necessary
+    This function runs daily at 2:30 AM
     """
     global rec_system, training_in_progress
     
     print("\n" + "="*70)
-    print("🕐 COMPROVACIÓ AUTOMÀTICA DIÀRIA - 2:30 AM")
+    print("DAILY AUTOMATIC CHECK - 2:30 AM")
     print("="*70)
     
     if rec_system is None:
-        print("⚠️  Sistema no inicialitzat. Saltant comprovació.")
+        print("System not initialized. Skipping check.")
         return
     
     if training_in_progress:
-        print("⚠️  Ja hi ha un entrenament en curs. Saltant comprovació.")
+        print("Training already in progress. Skipping check.")
         return
     
-    # Comprovar si les dades han canviat
+    # Check if data has changed
     if not rec_system.has_data_changed():
-        print("✅ Les dades no han canviat. No cal reentrenar.")
+        print("Data hasn't changed. No retraining needed.")
         print("="*70)
         return
     
-    print("🔔 DADES NOVES DETECTADES!")
-    print("🚀 Iniciant entrenament del model en background...")
+    print("NEW DATA DETECTED!")
+    print("Starting model training in background...")
     print("="*70)
     
-    # Entrenar en un thread separat per no bloquejar l'app
+    # Train in separate thread to avoid blocking
     training_thread = threading.Thread(target=train_model_background)
     training_thread.daemon = True
     training_thread.start()
@@ -135,31 +135,31 @@ def check_and_retrain():
 
 def train_model_background():
     """
-    Entrena el model en background sense bloquejar l'aplicació
-    Un cop acabat, recarrega el model nou automàticament
+    Train model in background without blocking the application
+    Once finished, reload the new model automatically
     """
     global rec_system, training_in_progress
     
     training_in_progress = True
     
     try:
-        print("\n🎓 ENTRENAMENT EN BACKGROUND INICIAT")
-        print("⏱️  Això pot trigar uns minuts...")
+        print("\nBACKGROUND TRAINING STARTED")
+        print("This may take a few minutes...")
         
-        # Entrenar el model (això triga)
+        # Train model (this takes time)
         rec_system.train_model(save=True)
         
-        print("\n🔄 Model entrenat! Recarregant...")
+        print("\nModel trained! Reloading...")
         
-        # Recarregar el model nou
+        # Reload new model
         if rec_system.reload_model():
-            print("✅ Model nou carregat correctament!")
-            print(f"📦 Ara s'està usant la versió v{rec_system.current_model_version}")
+            print("New model loaded correctly!")
+            print(f"Now using version v{rec_system.current_model_version}")
         else:
-            print("⚠️  No s'ha pogut recarregar el model nou")
+            print("Could not reload new model")
         
     except Exception as e:
-        print(f"❌ Error durant l'entrenament: {str(e)}")
+        print(f"Error during training: {str(e)}")
         import traceback
         traceback.print_exc()
     
@@ -170,57 +170,57 @@ def train_model_background():
 
 def setup_scheduler():
     """
-    Configura el scheduler per:
-    1. Executar check_and_retrain cada dia a les 2:30 AM
-    2. Comprovar nous models cada 30 segons
+    Configure scheduler for:
+    1. Run check_and_retrain daily at 2:30 AM
+    2. Check for new models every 30 seconds
     """
     scheduler = BackgroundScheduler()
     
-    # Trigger 1: Comprovació diària a les 2:30 AM
+    # Trigger 1: Daily check at 2:30 AM
     trigger_daily = CronTrigger(hour=2, minute=30)
     
     scheduler.add_job(
         func=check_and_retrain,
         trigger=trigger_daily,
         id='daily_model_check',
-        name='Comprovació diària del model',
+        name='Daily model check',
         replace_existing=True
     )
     
-    # Trigger 2: Comprovar nous models cada 30 segons (per detectar entrenaments manuals)
+    # Trigger 2: Check for new models every 30 seconds
     scheduler.add_job(
         func=check_for_new_models,
         trigger='interval',
         seconds=30,
         id='model_watcher',
-        name='Vigilant de models nous',
+        name='New model watcher',
         replace_existing=True
     )
     
     scheduler.start()
     
-    print("\n⏰ SCHEDULER CONFIGURAT")
-    print(f"   📅 Comprovació automàtica: cada dia a les 2:30 AM")
-    print(f"   🔍 Vigilant de models: cada 30 segons")
-    print(f"   🤖 Recarregarà automàticament models nous")
+    print("\nSCHEDULER CONFIGURED")
+    print(f"   Automatic check: daily at 2:30 AM")
+    print(f"   Model watcher: every 30 seconds")
+    print(f"   Will automatically reload new models")
     
     return scheduler
 
 
 # ============================================================================
-# ENDPOINTS DE L'API
+# API ENDPOINTS
 # ============================================================================
 
 @app.route('/', methods=['GET'])
 def home():
-    """Pàgina principal"""
+    """Main page"""
     return render_template('index.html')
 
 
 @app.route('/api/model-info', methods=['GET'])
 def get_model_info():
     """
-    Endpoint per obtenir informació sobre el model actual
+    Endpoint to get information about current model
     GET /api/model-info
     
     Returns:
@@ -236,7 +236,7 @@ def get_model_info():
     """
     if rec_system is None:
         return jsonify({
-            "error": "Sistema no inicialitzat"
+            "error": "System not initialized"
         }), 503
     
     try:
@@ -252,43 +252,43 @@ def get_model_info():
 @app.route('/api/recommendations', methods=['POST'])
 def get_recommendations():
     """
-    Endpoint per obtenir recomanacions basades en un anime
+    Endpoint to get recommendations based on an anime
     POST: { "anime": "Death Note", "rating": 4.5 }
     """
     if rec_system is None:
         return jsonify({
-            "error": "El sistema no està inicialitzat. "
-                     "Executa 'python scripts/train_model.py' primer."
+            "error": "System is not initialized. "
+                     "Run 'python scripts/train_model.py' first."
         }), 503
     
     try:
         data = request.get_json()
         anime_name = data.get('anime')
-        rating = data.get('rating', 5)  # Default 5 si no s'especifica
+        rating = data.get('rating', 5)
         
         if not anime_name:
             return jsonify({
-                "error": "El paràmetre 'anime' és obligatori"
+                "error": "Parameter 'anime' is required"
             }), 400
         
-        # Cercar animes coincidents
+        # Search for matching animes
         matching_animes = rec_system.search_anime_exact(anime_name)
         
-        # Si hi ha múltiples coincidències, retornar-les per escollir
+        # If multiple matches, return them for selection
         if len(matching_animes) > 1:
             return jsonify({
                 "status": "multiple_matches",
-                "message": f"S'han trobat {len(matching_animes)} animes amb aquest nom",
-                "matches": matching_animes[:10],  # Màxim 10 resultats
+                "message": f"Found {len(matching_animes)} animes with this name",
+                "matches": matching_animes[:10],
                 "query": anime_name
-            }), 300  # HTTP 300 Multiple Choices
+            }), 300
         
-        # Si només hi ha una coincidència o cap
+        # If only one match or none
         if len(matching_animes) == 1:
             anime_name = matching_animes[0]['name']
         
-        # Obtenir recomanacions ajustades segons la valoració
-        recommendations = rec_system.get_recommendations_adjusted(
+        # Get adjusted recommendations based on rating
+        recommendations, exact_anime_name = rec_system.get_recommendations_adjusted(
             anime_name=anime_name,
             user_rating=rating,
             num_recommendations=6
@@ -296,34 +296,34 @@ def get_recommendations():
         
         if recommendations is None:
             return jsonify({
-                "error": f"No s'ha trobat l'anime '{anime_name}'. "
-                         "Prova amb una cerca més específica."
+                "error": f"Anime '{anime_name}' not found. "
+                         "Try a more specific search."
             }), 404
         
         return jsonify({
-            "anime": anime_name,
+            "anime": exact_anime_name,  # Return exact anime name used
             "user_rating": rating,
             "recommendations": recommendations
         })
         
     except Exception as e:
-        print(f"❌ Error: {str(e)}")
+        print(f"Error: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({
-            "error": f"Error intern del servidor: {str(e)}"
+            "error": f"Internal server error: {str(e)}"
         }), 500
 
 
 @app.route('/api/recommendations-multiple', methods=['POST'])
 def get_recommendations_multiple():
     """
-    Endpoint per obtenir recomanacions basades en múltiples animes
+    Endpoint to get recommendations based on multiple animes
     POST: { "ratings": { "Death Note": 5, "Code Geass": 4.5 } }
     """
     if rec_system is None:
         return jsonify({
-            "error": "Sistema no inicialitzat"
+            "error": "System not initialized"
         }), 503
     
     try:
@@ -332,7 +332,7 @@ def get_recommendations_multiple():
         
         if not ratings or not isinstance(ratings, dict):
             return jsonify({
-                "error": "El paràmetre 'ratings' és obligatori i ha de ser un diccionari"
+                "error": "Parameter 'ratings' is required and must be a dictionary"
             }), 400
         
         recommendations = rec_system.get_recommendations_for_user(
@@ -346,19 +346,19 @@ def get_recommendations_multiple():
         })
         
     except Exception as e:
-        print(f"❌ Error: {str(e)}")
+        print(f"Error: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({
-            "error": f"Error intern: {str(e)}"
+            "error": f"Internal error: {str(e)}"
         }), 500
 
 
 @app.route('/api/animes', methods=['GET'])
 def get_animes():
-    """Retorna la llista de tots els animes disponibles"""
+    """Return list of all available animes"""
     if rec_system is None:
-        return jsonify({"error": "Sistema no inicialitzat"}), 503
+        return jsonify({"error": "System not initialized"}), 503
     
     try:
         animes = rec_system.get_all_animes()
@@ -372,15 +372,15 @@ def get_animes():
 
 @app.route('/api/search', methods=['GET'])
 def search_anime():
-    """Cerca animes pel nom"""
+    """Search animes by name"""
     if rec_system is None:
-        return jsonify({"error": "Sistema no inicialitzat"}), 503
+        return jsonify({"error": "System not initialized"}), 503
     
     try:
         query = request.args.get('q', '')
         if not query:
             return jsonify({
-                "error": "El paràmetre 'q' és obligatori"
+                "error": "Parameter 'q' is required"
             }), 400
             
         results = rec_system.search_anime(query)
@@ -394,9 +394,9 @@ def search_anime():
 
 @app.route('/api/models', methods=['GET'])
 def list_models():
-    """Llista tots els models disponibles"""
+    """List all available models"""
     if rec_system is None:
-        return jsonify({"error": "Sistema no inicialitzat"}), 503
+        return jsonify({"error": "System not initialized"}), 503
     
     try:
         models = rec_system.list_available_models()
@@ -411,72 +411,72 @@ def list_models():
 @app.route('/api/train', methods=['POST'])
 def manual_train():
     """
-    Endpoint per forçar un entrenament manual del model
+    Endpoint to force manual model training
     POST /api/train
     """
     global training_in_progress
     
     if rec_system is None:
-        return jsonify({"error": "Sistema no inicialitzat"}), 503
+        return jsonify({"error": "System not initialized"}), 503
     
     if training_in_progress:
         return jsonify({
-            "error": "Ja hi ha un entrenament en curs. Espera que acabi."
+            "error": "Training already in progress. Please wait for it to finish."
         }), 409
     
-    # Iniciar entrenament en background
+    # Start training in background
     training_thread = threading.Thread(target=train_model_background)
     training_thread.daemon = True
     training_thread.start()
     
     return jsonify({
-        "message": "Entrenament iniciat en background",
+        "message": "Training started in background",
         "training_in_progress": True
     })
 
 
 # ============================================================================
-# INICIALITZACIÓ I EXECUCIÓ
+# INITIALIZATION AND EXECUTION
 # ============================================================================
 
 if __name__ == '__main__':
-    # Inicialitzar el sistema
+    # Initialize system
     if initialize_system():
         print("\n" + "="*70)
-        print("✅ SERVIDOR FLASK INICIAT CORRECTAMENT")
+        print("FLASK SERVER STARTED SUCCESSFULLY")
         print("="*70)
-        print(f"📊 Sistema carregat amb:")
+        print(f"System loaded with:")
         print(f"  - {len(rec_system.animes_dict)} animes")
-        print(f"  - {len(rec_system.users_dict)} usuaris")
+        print(f"  - {len(rec_system.users_dict)} users")
         print(f"  - Model v{rec_system.current_model_version}")
         
-        # Configurar scheduler automàtic
+        # Configure automatic scheduler
         scheduler = setup_scheduler()
         
         try:
-            # El host ha de ser '0.0.0.0' per acceptar connexions externes
-            # NO pot ser una URL com 'https://recomanador.hermes.cat'
-            host = '0.0.0.0'  # Això permet accés des de qualsevol IP
+            # Host must be '0.0.0.0' to accept external connections
+            # Cannot be a URL like 'https://recomanador.hermes.cat'
+            host = '0.0.0.0'  # This allows access from any IP
             port = int(os.environ.get('PORT', 5000))
             
-            print(f"\n🌐 Servidor iniciat!")
+            print(f"\nServer started!")
             print(f"  - Local: http://localhost:{port}")
-            print(f"  - Xarxa: http://0.0.0.0:{port}")
-            print(f"  - Producció: https://recomanador.hermes.cat")
+            print(f"  - Network: http://0.0.0.0:{port}")
+            print(f"  - Production: https://recomanador.hermes.cat")
             print("="*70 + "\n")
             
-            app.run(debug=True, host=host, port=port, use_reloader=False)
+            app.run(debug=False, host=host, port=port, use_reloader=False)
             
         except (KeyboardInterrupt, SystemExit):
-            # Aturar el scheduler quan es tanca l'app
+            # Stop scheduler when closing app
             scheduler.shutdown()
-            print("\n👋 Scheduler aturat. Adéu!")
+            print("\nScheduler stopped. Goodbye!")
     else:
         print("\n" + "="*70)
-        print("❌ NO ES POT INICIAR EL SERVIDOR")
+        print("CANNOT START SERVER")
         print("="*70)
-        print("\n🔧 Per solucionar:")
-        print("  1. Executa: python scripts/train_model.py")
-        print("  2. O executa: ./scripts/train_auto.sh")
-        print("  3. Torna a executar: python app.py")
+        print("\nTo fix:")
+        print("  1. Run: python scripts/train_model.py")
+        print("  2. Or run: ./scripts/train_auto.sh")
+        print("  3. Then run again: python app.py")
         print("="*70 + "\n")

@@ -1,6 +1,6 @@
 """
-Sistema de Recomanacions d'Animes
-Motor principal amb collaborative filtering i Pearson correlation
+Anime Recommendation System
+Main engine with collaborative filtering and Pearson correlation
 """
 
 from src.models.anime import Anime
@@ -17,7 +17,7 @@ class RecommendationSystem:
 
     def __init__(self, anime_csv_path='data/anime.csv', rating_csv_path='data/cleaned_data.csv', model_dir='model'):
         """
-        Inicialitza el sistema de recomanacions carregant el model més recent
+        Initialize the recommendation system by loading the most recent model
         """
         self.animes_dict = {}
         self.users_dict = {}
@@ -25,40 +25,40 @@ class RecommendationSystem:
         self.userRatings_pivot = None
         self.corrMatrix = None
         self.animeStats = None
-        self.animePopularity = None  # Nova: per guardar popularitat
-        self.animeAvgRating = None   # Nova: per guardar rating mitjà
+        self.animePopularity = None
+        self.animeAvgRating = None
         self.model_dir = Path(__file__).resolve().parent.parent / model_dir
         self.anime_csv_path = Path(anime_csv_path)
         self.rating_csv_path = Path(rating_csv_path)
         
-        # Info del model carregat
+        # Model info
         self.current_model_version = None
         self.model_load_time = None
-        self.data_files_hash = None  # Per detectar canvis
+        self.data_files_hash = None
         
-        # Crear directori model si no existeix
+        # Create model directory if it doesn't exist
         self.model_dir.mkdir(exist_ok=True)
         
-        # Intentar carregar model entrenat
+        # Try to load trained model
         if not self._load_latest_model():
             print("\n" + "="*70)
-            print("⚠️  CAP MODEL ENTRENAT TROBAT")
+            print("WARNING: NO TRAINED MODEL FOUND")
             print("="*70)
-            print("\nEl directori 'model/' està buit o no conté models vàlids.")
-            print("\n🔧 Per generar el model, executa:")
+            print("\nThe 'model/' directory is empty or doesn't contain valid models.")
+            print("\nTo generate the model, run:")
             print("   python scripts/train_model.py")
-            print("\nO des de la carpeta arrel:")
+            print("\nOr from root directory:")
             print("   ./scripts/train_auto.sh")
             print("="*70)
             raise FileNotFoundError(
-                "No s'ha trobat cap model entrenat. "
-                "Executa train_model() abans d'usar el sistema."
+                "No trained model found. "
+                "Run train_model() before using the system."
             )
     
     def get_data_files_hash(self):
         """
-        Calcula un hash dels fitxers de dades per detectar canvis
-        Utilitza el timestamp de modificació dels fitxers CSV
+        Calculate a hash of data files to detect changes
+        Uses modification timestamp of CSV files
         """
         try:
             anime_mtime = self.anime_csv_path.stat().st_mtime
@@ -69,10 +69,10 @@ class RecommendationSystem:
     
     def has_data_changed(self):
         """
-        Comprova si els fitxers de dades han canviat des de l'últim entrenament
+        Check if data files have changed since last training
         
         Returns:
-            bool: True si les dades han canviat, False altrament
+            bool: True if data has changed, False otherwise
         """
         current_hash = self.get_data_files_hash()
         if current_hash is None or self.data_files_hash is None:
@@ -81,10 +81,10 @@ class RecommendationSystem:
     
     def _get_latest_version(self):
         """
-        Troba l'última versió del model disponible
+        Find the latest model version available
         
         Returns:
-            int: Número de la versió més recent (0 si no n'hi ha cap)
+            int: Most recent version number (0 if none exist)
         """
         if not self.model_dir.exists():
             return 0
@@ -101,16 +101,16 @@ class RecommendationSystem:
     
     def _get_next_version(self):
         """
-        Retorna el següent número de versió disponible
+        Returns the next available version number
         """
         return self._get_latest_version() + 1
     
     def _load_latest_model(self):
         """
-        Carrega l'última versió del model entrenat
+        Load the latest trained model version
         
         Returns:
-            bool: True si s'ha carregat correctament, False altrament
+            bool: True if loaded successfully, False otherwise
         """
         latest_version = self._get_latest_version()
         
@@ -119,13 +119,13 @@ class RecommendationSystem:
         
         model_path = self.model_dir / f'corr_matrix_v{latest_version}.pkl'
         
-        print(f"\n📦 Carregant model v{latest_version} des de {model_path}...")
+        print(f"\nLoading model v{latest_version} from {model_path}...")
         
         try:
             with open(model_path, 'rb') as f:
                 model_data = pickle.load(f)
             
-            # Carregar les dades guardades
+            # Load saved data
             self.animes_dict = model_data['animes_dict']
             self.users_dict = model_data['users_dict']
             self.ratings_df = model_data['ratings_df']
@@ -133,75 +133,75 @@ class RecommendationSystem:
             self.corrMatrix = model_data['corrMatrix']
             self.animeStats = model_data['animeStats']
             
-            # Carregar estadístiques addicionals si existeixen
+            # Load additional statistics if they exist
             self.animePopularity = model_data.get('animePopularity')
             self.animeAvgRating = model_data.get('animeAvgRating')
             
-            # Si no existeixen, calcular-les
+            # If they don't exist, calculate them
             if self.animePopularity is None:
                 self._calculate_anime_stats()
             
-            # Guardar info del model
+            # Save model info
             self.current_model_version = latest_version
             self.model_load_time = datetime.now()
             self.data_files_hash = model_data.get('data_files_hash')
             
-            print(f"✅ Model v{latest_version} carregat correctament!")
+            print(f"Model v{latest_version} loaded successfully!")
             print(f"   - {len(self.animes_dict)} animes")
-            print(f"   - {len(self.users_dict)} usuaris")
-            print(f"   - Matriu de correlacions: {self.corrMatrix.shape}")
+            print(f"   - {len(self.users_dict)} users")
+            print(f"   - Correlation matrix: {self.corrMatrix.shape}")
             
             return True
             
         except Exception as e:
-            print(f"❌ Error carregant el model: {str(e)}")
+            print(f"Error loading model: {str(e)}")
             return False
     
     def _calculate_anime_stats(self):
         """
-        Calcula estadístiques addicionals dels animes
+        Calculate additional anime statistics
         """
         if self.ratings_df is not None:
-            # Popularitat (nombre de valoracions)
+            # Popularity (number of ratings)
             self.animePopularity = self.ratings_df.groupby('name')['rating'].count()
             
-            # Rating mitjà
+            # Average rating
             self.animeAvgRating = self.ratings_df.groupby('name')['rating'].mean()
     
     def reload_model(self):
         """
-        Recarrega el model més recent disponible
-        Útil quan s'ha entrenat un model nou en background
+        Reload the most recent available model
+        Useful when a new model has been trained in the background
         
         Returns:
-            bool: True si s'ha recarregat correctament
+            bool: True if reloaded successfully
         """
-        print("\n🔄 Recarregant model més recent...")
+        print("\nReloading latest model...")
         return self._load_latest_model()
     
     def train_model(self, save=True):
         """
-        Entrena el model calculant la matriu de correlacions
-        Aquest procés pot trigar uns minuts amb datasets grans
+        Train the model by calculating the correlation matrix
+        This process can take several minutes with large datasets
         
         Args:
-            save (bool): Si True, guarda el model en un fitxer PKL versionat
+            save (bool): If True, save model to a versioned PKL file
         """
         print("\n" + "="*70)
-        print("🚀 INICIANT ENTRENAMENT DEL MODEL")
+        print("STARTING MODEL TRAINING")
         print("="*70)
         
-        # Carregar dades dels CSV
+        # Load data from CSVs
         self._load_data_for_training(self.anime_csv_path, self.rating_csv_path)
         
         if save:
-            # Guardar el model amb la següent versió
+            # Save model with next version
             next_version = self._get_next_version()
             model_path = self.model_dir / f'corr_matrix_v{next_version}.pkl'
             
-            print(f"\n💾 Guardant model v{next_version} a {model_path}...")
+            print(f"\nSaving model v{next_version} to {model_path}...")
             
-            # Calcular hash dels fitxers de dades
+            # Calculate data files hash
             data_hash = self.get_data_files_hash()
             
             model_data = {
@@ -224,62 +224,62 @@ class RecommendationSystem:
                 with open(model_path, 'wb') as f:
                     pickle.dump(model_data, f, protocol=pickle.HIGHEST_PROTOCOL)
                 
-                print(f"✅ Model v{next_version} guardat correctament!")
-                print(f"   Mida del fitxer: {model_path.stat().st_size / (1024*1024):.1f} MB")
+                print(f"Model v{next_version} saved successfully!")
+                print(f"   File size: {model_path.stat().st_size / (1024*1024):.1f} MB")
                 
-                # Actualitzar info del model actual
+                # Update current model info
                 self.current_model_version = next_version
                 self.model_load_time = datetime.now()
                 self.data_files_hash = data_hash
                 
             except Exception as e:
-                print(f"❌ Error guardant el model: {str(e)}")
+                print(f"Error saving model: {str(e)}")
                 raise
         
         print("="*70)
-        print("✅ ENTRENAMENT COMPLETAT!")
+        print("TRAINING COMPLETED!")
         print("="*70)
     
     def _load_data_for_training(self, anime_csv_path, rating_csv_path):
         """
-        Carrega i processa les dades dels CSV per entrenar el model
+        Load and process data from CSVs to train the model
         """
-        print("\n📂 Carregant dades dels CSV...")
+        print("\nLoading data from CSVs...")
         
-        # Llegir anime.csv amb encoding UTF-8
+        # Read anime.csv with UTF-8 encoding
         a_cols = ['anime_id', 'name', 'genre', 'members']
         animes_df = pd.read_csv(
             anime_csv_path, 
             sep=',', 
             usecols=a_cols, 
-            encoding="utf-8",  # Canviat a UTF-8
-            on_bad_lines='skip'  # Saltar línies problemàtiques
-        )
-        
-        # Llegir rating CSV amb encoding UTF-8
-        ratings_df = pd.read_csv(
-            rating_csv_path, 
-            sep=',', 
-            encoding="utf-8",  # Canviat a UTF-8
+            encoding="utf-8",
             on_bad_lines='skip'
         )
         
-        # Merge de les dades
+        # Read rating CSV with UTF-8 encoding
+        ratings_df = pd.read_csv(
+            rating_csv_path, 
+            sep=',', 
+            encoding="utf-8",
+            on_bad_lines='skip'
+        )
+        
+        # Merge data
         self.ratings_df = pd.merge(animes_df, ratings_df)
         
-        print(f"   ✓ Dades carregades: {len(self.ratings_df)} valoracions")
+        print(f"   Data loaded: {len(self.ratings_df)} ratings")
         
-        # Crear objectes Anime
-        print(f"\n🎬 Processant animes...")
+        # Create Anime objects
+        print(f"\nProcessing animes...")
         for _, row in animes_df.iterrows():
             anime = Anime(row['anime_id'], row['name'], row['members'])
             anime.genre = row['genre']
             self.animes_dict[row['anime_id']] = anime
         
-        print(f"   ✓ {len(self.animes_dict)} animes processats")
+        print(f"   {len(self.animes_dict)} animes processed")
         
-        # Crear objectes User
-        print(f"\n👥 Processant usuaris...")
+        # Create User objects
+        print(f"\nProcessing users...")
         for _, row in self.ratings_df.iterrows():
             user_id = row['user_id']
             anime_id = row['anime_id']
@@ -291,39 +291,39 @@ class RecommendationSystem:
                 self.users_dict[user_id] = []
             self.users_dict[user_id].append(user)
         
-        print(f"   ✓ {len(self.users_dict)} usuaris processats")
+        print(f"   {len(self.users_dict)} users processed")
         
-        # Crear pivot table
-        print(f"\n📊 Creant pivot table...")
+        # Create pivot table
+        print(f"\nCreating pivot table...")
         self.userRatings_pivot = self.ratings_df.pivot_table(
             index='user_id', 
             columns='name', 
             values='rating'
         )
-        print(f"   ✓ Pivot table creada: {self.userRatings_pivot.shape}")
+        print(f"   Pivot table created: {self.userRatings_pivot.shape}")
         
-        # Calcular matriu de correlacions amb un mínim de 50 en lloc de 100
-        print(f"\n🔗 Calculant matriu de correlacions...")
-        self.corrMatrix = self.userRatings_pivot.corr(method='pearson', min_periods=50)  # Baixat a 50
-        print(f"   ✓ Matriu de correlacions calculada: {self.corrMatrix.shape}")
+        # Calculate correlation matrix with minimum 100 common users for reliable correlations
+        print(f"\nCalculating correlation matrix...")
+        self.corrMatrix = self.userRatings_pivot.corr(method='pearson', min_periods=100)
+        print(f"   Correlation matrix calculated: {self.corrMatrix.shape}")
         
-        # Calcular estadístiques
-        print(f"\n📈 Calculant estadístiques...")
+        # Calculate statistics
+        print(f"\nCalculating statistics...")
         self.animeStats = self.ratings_df.groupby('name').agg({'rating': np.size})
         
-        # Calcular popularitat i rating mitjà
+        # Calculate popularity and average rating
         self._calculate_anime_stats()
         
-        print(f"   ✓ Estadístiques calculades")
+        print(f"   Statistics calculated")
         
-        print(f"\n✅ Totes les dades processades correctament!")
+        print(f"\nAll data processed successfully!")
     
     def get_model_info(self):
         """
-        Retorna informació sobre el model actual
+        Return information about the current model
         
         Returns:
-            dict: Informació del model (versió, temps de càrrega, estadístiques)
+            dict: Model information (version, load time, statistics)
         """
         return {
             'version': int(self.current_model_version) if self.current_model_version else 0,
@@ -336,10 +336,10 @@ class RecommendationSystem:
     
     def search_anime_exact(self, query):
         """
-        Cerca animes que coincideixin exactament o parcialment amb la query
+        Search for animes that match exactly or partially with the query
         
         Returns:
-            list: Llista d'animes que coincideixen
+            list: List of matching animes
         """
         query_lower = query.lower()
         matches = []
@@ -347,11 +347,11 @@ class RecommendationSystem:
         for anime_name in self.userRatings_pivot.columns:
             anime_name_lower = anime_name.lower()
             
-            # Coincidència exacta
+            # Exact match
             if anime_name_lower == query_lower:
                 return [{'name': anime_name, 'match_type': 'exact'}]
             
-            # Coincidència parcial
+            # Partial match
             if query_lower in anime_name_lower:
                 anime_info = self.ratings_df[self.ratings_df['name'] == anime_name].iloc[0]
                 matches.append({
@@ -364,69 +364,82 @@ class RecommendationSystem:
     
     def get_recommendations_adjusted(self, anime_name, user_rating=5, num_recommendations=6):
         """
-        Obté recomanacions ajustades segons la valoració de l'usuari
+        Get recommendations adjusted based on user rating
         
-        - Si rating >= 4: Retorna animes similars
-        - Si rating <= 2: Retorna animes diferents (correlació negativa o baixa)
-        - Si rating = 3: Retorna animes moderadament similars
+        - If rating >= 4: Return similar animes (high positive correlation)
+        - If rating <= 2: Return different animes (low or negative correlation)
+        - If rating = 3: Return moderately similar animes
+        
+        Returns:
+            tuple: (recommendations list, exact anime name used)
         """
         
-        # Verificar que l'anime existeix
+        # Find exact anime name
+        exact_anime_name = None
         if anime_name not in self.userRatings_pivot.columns:
             matching = [col for col in self.userRatings_pivot.columns if anime_name.lower() in col.lower()]
             if not matching:
-                return None
-            anime_name = matching[0]
+                return None, None
+            exact_anime_name = matching[0]
+        else:
+            exact_anime_name = anime_name
         
-        # Obtenir correlacions
-        anime_ratings = self.userRatings_pivot[anime_name]
+        # Get correlations
+        anime_ratings = self.userRatings_pivot[exact_anime_name]
         similar_animes = self.userRatings_pivot.corrwith(anime_ratings)
         similar_animes = similar_animes.dropna()
         
-        # Crear DataFrame amb correlacions
+        # Create DataFrame with correlations
         df = pd.DataFrame(similar_animes, columns=['similarity'])
         
-        # Filtrar per popularitat (mínim 50 valoracions)
-        popular_animes = self.animeStats['rating'] >= 50  # Baixat a 50
+        # Filter by popularity (minimum 100 ratings for reliable recommendations)
+        popular_animes = self.animeStats['rating'] >= 100
         df = self.animeStats[popular_animes].join(df)
         df = df.dropna()
         
-        # Afegir rating mitjà i popularitat
+        # Add average rating and popularity
         if self.animeAvgRating is not None:
             df = df.join(self.animeAvgRating.rename('avg_rating'))
         if self.animePopularity is not None:
             df = df.join(self.animePopularity.rename('popularity'))
         
-        # Eliminar l'anime actual dels resultats
-        df = df[df.index != anime_name]
+        # Remove the current anime from results
+        df = df[df.index != exact_anime_name]
         
-        # AJUSTAR SEGONS LA VALORACIÓ DE L'USUARI
+        # ADJUST BASED ON USER RATING
         if user_rating >= 4:
-            # Li agrada: retornar els més similars amb bon rating
-            df['score'] = df['similarity'] * 0.7 + (df.get('avg_rating', 7) / 10) * 0.3
+            # User likes it: return most similar animes with high correlation
+            # Filter: only animes with correlation > 0.5 (strong positive correlation)
+            df = df[df['similarity'] > 0.5]
+            
+            # Score: prioritize similarity heavily (90%) with some weight on avg_rating (10%)
+            df['score'] = df['similarity'] * 0.9 + (df.get('avg_rating', 7) / 10) * 0.1
             df = df.sort_values('score', ascending=False)
             
         elif user_rating <= 2:
-            # No li agrada: retornar animes diferents (correlació baixa o negativa) però populars
-            # Prioritzar animes amb correlació baixa però bon rating mitjà
-            df['difference_score'] = (1 - abs(df['similarity'])) * 0.5 + (df.get('avg_rating', 7) / 10) * 0.5
-            df = df[df['similarity'] < 0.3]  # Només animes poc correlacionats
+            # User doesn't like it: return different animes
+            # Filter: animes with low correlation or negative correlation
+            df = df[df['similarity'] < 0.2]
+            
+            # Score: prioritize good rating and popularity
+            df['difference_score'] = (df.get('avg_rating', 7) / 10) * 0.6 + \
+                                    (df.get('popularity', 0) / df.get('popularity', 1).max()) * 0.4
             df = df.sort_values('difference_score', ascending=False)
             
-        else:  # rating = 3
-            # Neutral: animes moderadament similars
-            df = df[(df['similarity'] > 0.2) & (df['similarity'] < 0.6)]
-            df['score'] = df['similarity'] * 0.5 + (df.get('avg_rating', 7) / 10) * 0.5
+        else:  # rating around 3
+            # Neutral: moderately similar animes
+            df = df[(df['similarity'] > 0.3) & (df['similarity'] < 0.6)]
+            df['score'] = df['similarity'] * 0.6 + (df.get('avg_rating', 7) / 10) * 0.4
             df = df.sort_values('score', ascending=False)
         
-        # Obtenir top recomanacions
+        # Get top recommendations
         top_recommendations = df.head(num_recommendations)
         
         recommendations = []
         for anime_name_rec in top_recommendations.index:
             anime_info = self.ratings_df[self.ratings_df['name'] == anime_name_rec].iloc[0]
             
-            # Obtenir correlació i score
+            # Get correlation and score
             correlation = top_recommendations.loc[anime_name_rec, 'similarity']
             avg_rating = top_recommendations.loc[anime_name_rec].get('avg_rating', anime_info.get('rating', 0))
             
@@ -438,17 +451,18 @@ class RecommendationSystem:
                 "correlation": float(round(correlation, 2)) if pd.notna(correlation) else 0.0
             })
         
-        return recommendations
+        return recommendations, exact_anime_name
     
     def get_recommendations(self, anime_name, user_rating=None, num_recommendations=6):
         """
-        Versió legacy per compatibilitat - redirigeix a get_recommendations_adjusted
+        Legacy version for compatibility - redirects to get_recommendations_adjusted
         """
-        return self.get_recommendations_adjusted(anime_name, user_rating or 5, num_recommendations)
+        recommendations, exact_name = self.get_recommendations_adjusted(anime_name, user_rating or 5, num_recommendations)
+        return recommendations
     
     def get_recommendations_for_user(self, user_ratings_dict, num_recommendations=10):
         """
-        Obté recomanacions basades en múltiples valoracions d'un usuari
+        Get recommendations based on multiple user ratings
         """
         simCandidates = pd.Series(dtype=float)
         
@@ -456,21 +470,21 @@ class RecommendationSystem:
             if anime_name not in self.corrMatrix.columns:
                 matching = [col for col in self.corrMatrix.columns if anime_name.lower() in col.lower()]
                 if not matching:
-                    print(f"Anime '{anime_name}' no trobat")
+                    print(f"Anime '{anime_name}' not found")
                     continue
                 anime_name = matching[0]
             
             sims = self.corrMatrix[anime_name].dropna()
             
-            # Ajustar segons la valoració
+            # Adjust based on rating
             if rating >= 4:
-                # Li agrada: mantenir correlacions positives
+                # User likes it: keep positive correlations
                 sims = sims.map(lambda x: x * rating)
             elif rating <= 2:
-                # No li agrada: invertir correlacions
+                # User doesn't like it: invert correlations
                 sims = sims.map(lambda x: -x * (6 - rating))
             else:
-                # Neutral: ponderar menys
+                # Neutral: weight less
                 sims = sims.map(lambda x: x * rating * 0.5)
             
             simCandidates = pd.concat([simCandidates, sims])
@@ -478,7 +492,7 @@ class RecommendationSystem:
         simCandidates = simCandidates.groupby(simCandidates.index).sum()
         simCandidates = simCandidates.sort_values(ascending=False)
         
-        # Eliminar animes ja valorats
+        # Remove already rated animes
         for anime_name in user_ratings_dict.keys():
             if anime_name in simCandidates.index:
                 simCandidates = simCandidates.drop(anime_name)
@@ -500,7 +514,7 @@ class RecommendationSystem:
         return recommendations
     
     def get_all_animes(self):
-        """Retorna tots els animes disponibles"""
+        """Return all available animes"""
         animes_list = []
         seen_names = set()
         
@@ -515,7 +529,7 @@ class RecommendationSystem:
         return sorted(animes_list, key=lambda x: x['name'])
     
     def search_anime(self, query):
-        """Cerca animes pel nom"""
+        """Search animes by name"""
         query_lower = query.lower()
         results = []
         
@@ -530,7 +544,7 @@ class RecommendationSystem:
         return results[:20]
     
     def list_available_models(self):
-        """Llista tots els models disponibles al directori model/"""
+        """List all available models in model/ directory"""
         if not self.model_dir.exists():
             return []
         

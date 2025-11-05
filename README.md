@@ -1,89 +1,119 @@
-# 🎬 Sistema de Recomanacions d'Animes v2.0
+# Anime Recommendation System v2.0
 
-Sistema intel·ligent de recomanacions basat en collaborative filtering amb correlació de Pearson. Ara amb suport per valoracions negatives, selecció múltiple d'animes, i reload automàtic de models!
+Intelligent recommendation system based on collaborative filtering with Pearson correlation. Now with support for negative ratings, multiple anime selection, and automatic model reloading.
 
-## 🚀 Novetats v2.0
+## New Features in v2.0
 
-### ✨ Noves Funcionalitats
+### Key Improvements
 
-✅ **Recomanacions ajustades segons valoració:**
-   - ⭐ **Alta (4-5)**: Troba animes similars
-   - 😐 **Mitjana (3)**: Animes moderadament relacionats  
-   - 👎 **Baixa (1-2)**: Descobreix alternatives diferents
+- **Rating-adjusted recommendations:**
+   - High (4-5): Find similar animes
+   - Medium (3): Moderately related animes
+   - Low (1-2): Discover different alternatives
 
-✅ **Selector múltiple d'animes:** Quan hi ha diversos animes amb el mateix nom, pots triar el correcte
+- **Multiple anime selector:** When multiple animes match the same name, you can choose the correct one
 
-✅ **Reload automàtic de models:** Detecta i carrega models nous cada 30 segons sense reiniciar
+- **Automatic model reloading:** Detects and loads new models every 30 seconds without restarting
 
-✅ **Millor suport UTF-8:** Mostra correctament noms japonesos i caràcters especials
+- **Better UTF-8 support:** Correctly displays Japanese names and special characters
 
-✅ **API compatible amb producció:** Funciona tant en localhost com a recomanador.hermes.cat
+- **Production-ready API:** Works both on localhost and recomanador.hermes.cat
 
-## 📋 Característiques
+- **Improved correlation algorithm:** Minimum 100 common users for reliable recommendations
 
-- **Recomanacions intel·ligents** amb correlació de Pearson ajustada
-- **Entrenament automàtic** cada dia a les 2:30 AM
-- **Sistema de versionat** de models (v1, v2, v3...)
-- **Footer informatiu** amb versió del model en temps real
-- **Càrrega ràpida** (2-3 segons vs 20 minuts!)
-- **Entrenament en background** sense bloquejar
-- **API REST** completa amb Flask
-- **Interfície web** moderna i responsive
+- **Better scoring system:** Prioritizes similarity (90%) over average rating (10%) for high ratings
 
-## 🔧 Instal·lació
+## Features
 
-### 1. Requisits
+- **Intelligent recommendations** with adjusted Pearson correlation
+- **Automatic training** every day at 2:30 AM
+- **Model versioning system** (v1, v2, v3...)
+- **Real-time footer** showing model version
+- **Fast loading** (2-3 seconds vs 20 minutes)
+- **Background training** without blocking
+- **Complete REST API** with Flask
+- **Modern and responsive web interface**
+
+## Installation
+
+### 1. Requirements
 ```bash
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 2. Entrenar el Model (OBLIGATORI la primera vegada)
+### 2. Train the Model (REQUIRED first time)
 ```bash
 python scripts/train_model.py
 ```
 
-⏱️ **Temps estimat:** 5-10 minuts segons la mida del dataset
+**Estimated time:** 5-10 minutes depending on dataset size
 
-### 3. Executar l'Aplicació
+### 3. Run the Application
 ```bash
 python app.py
 ```
 
-Accedeix a:
+Access at:
 - Local: `http://localhost:5000`
-- Producció: `https://recomanador.hermes.cat`
+- Production: `https://recomanador.hermes.cat`
 
-## 🤖 Com Funciona el Sistema
+## How the System Works
 
-### Sistema de Valoracions
+### Rating System
 
-El sistema ara interpreta les valoracions de manera intel·ligent:
+The system intelligently interprets ratings:
 
-| Valoració | Comportament | Exemple |
-|-----------|--------------|---------|
-| ⭐⭐⭐⭐⭐ (4-5) | Cerca animes similars | Si t'agrada "Death Note", et recomana thrillers psicològics |
-| ⭐⭐⭐ (3) | Cerca animes moderats | Recomanacions neutrals, ni molt similars ni molt diferents |
-| ⭐⭐ (1-2) | Cerca alternatives | Si no t'agrada "One Piece", et recomana animes curts o d'altres gèneres |
+| Rating | Behavior | Example |
+|--------|----------|---------|
+| 4-5 stars | Search similar animes | If you like "Death Note", recommends psychological thrillers |
+| 3 stars | Search moderate animes | Neutral recommendations, neither very similar nor very different |
+| 1-2 stars | Search alternatives | If you don't like "One Piece", recommends short animes or other genres |
 
-### Reload Automàtic de Models
+### Automatic Model Reloading
 
-L'aplicació comprova cada **30 segons** si hi ha models nous:
-- Si entrenes manualment amb `train_model.py`, es detecta automàticament
-- No cal reiniciar l'API
-- Els usuaris no noten cap interrupció
+The application checks every **30 seconds** for new models:
+- If you train manually with `train_model.py`, it's detected automatically
+- No need to restart the API
+- Users don't notice any interruption
 
-### Múltiples Coincidències
+### Multiple Matches
 
-Si cerques "Detective Conan" i hi ha diversos resultats:
-1. El sistema mostra tots els animes coincidents
-2. Pots seleccionar l'anime exacte que vols
-3. Les recomanacions es basen en la teva selecció específica
+If you search for "Detective Conan" and multiple results exist:
+1. System shows all matching animes
+2. You can select the exact anime you want
+3. Recommendations are based on your specific selection
 
-## 🌐 API Endpoints
+## Correlation Algorithm
 
-### Recomanacions Principals
+The system uses Pearson correlation with the following parameters:
+
+- **Minimum common users (min_periods):** 100
+  - Ensures reliable correlations
+  - Prevents random similarities from small sample sizes
+
+- **Minimum ratings per anime:** 100
+  - Only recommends animes with sufficient data
+  - Filters out obscure animes with few ratings
+
+- **Scoring for high ratings (4-5):**
+  ```python
+  score = similarity * 0.9 + (avg_rating / 10) * 0.1
+  # Prioritizes similarity heavily (90%) over average rating (10%)
+  # Only considers animes with correlation > 0.5 (strong positive correlation)
+  ```
+
+- **Scoring for low ratings (1-2):**
+  ```python
+  score = (avg_rating / 10) * 0.6 + (popularity / max_popularity) * 0.4
+  # Prioritizes well-rated and popular animes
+  # Only considers animes with correlation < 0.2 (low or negative correlation)
+  ```
+
+## API Endpoints
+
+### Main Recommendations
 ```bash
 POST /api/recommendations
 {
@@ -91,7 +121,7 @@ POST /api/recommendations
   "rating": 4.5
 }
 
-# Resposta amb múltiples coincidències (HTTP 300):
+# Response with multiple matches (HTTP 300):
 {
   "status": "multiple_matches",
   "matches": [
@@ -99,9 +129,16 @@ POST /api/recommendations
     {"name": "Death Note: Rewrite", "genre": "Recap"}
   ]
 }
+
+# Response with recommendations (HTTP 200):
+{
+  "anime": "Death Note",  # Exact name used
+  "user_rating": 4.5,
+  "recommendations": [...]
+}
 ```
 
-### Informació del Model
+### Model Information
 ```bash
 GET /api/model-info
 
@@ -114,82 +151,82 @@ GET /api/model-info
 }
 ```
 
-## 🛠️ Resolució de Problemes
+## Troubleshooting
 
-### Les recomanacions no semblen bones
+### Recommendations don't seem good
 
-**Possibles causes:**
-1. **Dataset massa petit**: El fitxer `rating_balanceado.csv` té massa filtres
-2. **Pocs usuaris en comú**: Baixa el `min_periods` a la correlació (ara està a 50)
+**Possible causes:**
+1. **Dataset too small**: The file `rating_balanceado.csv` has too many filters
+2. **Few users in common**: Lower the `min_periods` in correlation (currently at 100)
 
-**Solució:**
+**Solution:**
 ```python
-# A recommendation_system.py, canvia:
-self.corrMatrix = self.userRatings_pivot.corr(method='pearson', min_periods=30)  # Baixar més
+# In recommendation_system.py, change:
+self.corrMatrix = self.userRatings_pivot.corr(method='pearson', min_periods=50)  # Lower
 ```
 
-### Caràcters japonesos no es veuen bé
+### Japanese characters not displaying correctly
 
-**Solució implementada:**
-- Tots els CSV es llegeixen amb `encoding='utf-8'`
-- HTML té `<meta charset="UTF-8">`
-- CSS inclou fonts japoneses
+**Implemented solution:**
+- All CSVs are read with `encoding='utf-8'`
+- HTML has `<meta charset="UTF-8">`
+- CSS includes Japanese fonts
 
-Si encara tens problemes, converteix els CSV:
+If you still have problems, convert CSVs:
 ```bash
 iconv -f ISO-8859-1 -t UTF-8 data/anime.csv > data/anime_utf8.csv
 mv data/anime_utf8.csv data/anime.csv
 ```
 
-### Error de connexió a l'API
+### API connection error
 
-**Per producció:**
-- L'app SEMPRE ha d'executar-se amb `host='0.0.0.0'`
-- El domini `recomanador.hermes.cat` ha d'apuntar al servidor
-- El JavaScript utilitza `window.location.origin` per trobar l'API
+**For production:**
+- App MUST always run with `host='0.0.0.0'`
+- Domain `recomanador.hermes.cat` must point to server
+- JavaScript uses `window.location.origin` to find API
 
-### L'entrenament automàtic no funciona
+### Automatic training not working
 
-Verifica que:
-1. El scheduler està actiu (mira els logs)
-2. Els fitxers CSV han canviat realment
-3. No hi ha un entrenament ja en curs
+Verify that:
+1. Scheduler is active (check logs)
+2. CSV files have actually changed
+3. Training is not already in progress
 
-## 📊 Millores del Model
+## Model Improvements
 
-### Per millorar la qualitat de les recomanacions:
+### To improve recommendation quality:
 
-1. **Augmentar el dataset:**
-   - Usa `rating.csv` original amb menys filtres
-   - O baixa els llindars a `data_cleaner.py`
+1. **Increase dataset:**
+   - Use original `rating.csv` with fewer filters
+   - Or lower thresholds in `data_cleaner.py`
 
-2. **Ajustar paràmetres:**
+2. **Adjust parameters:**
    ```python
-   # Mínim d'usuaris per calcular correlació
-   min_periods=30  # Baixar per més cobertura
+   # Minimum users to calculate correlation
+   min_periods=50  # Lower for more coverage
    
-   # Mínim de valoracions per anime
-   popular_animes = self.animeStats['rating'] >= 30  # Baixar per més varietat
+   # Minimum ratings per anime
+   popular_animes = self.animeStats['rating'] >= 50  # Lower for more variety
    ```
 
-3. **Afegir més factors:**
-   - Gèneres
-   - Any de llançament
-   - Popularitat global
+3. **Add more factors:**
+   - Genres
+   - Release year
+   - Global popularity
 
-## 💡 Consells d'Ús
+## Usage Tips
 
-### Per als usuaris:
-- **Puntua alt (4-5)** animes que t'agraden per trobar similars
-- **Puntua baix (1-2)** animes que no t'agraden per descobrir alternatives
-- **Puntua neutral (3)** per explorar moderadament
+### For users:
+- **Rate high (4-5)** animes you like to find similar ones
+- **Rate low (1-2)** animes you don't like to discover alternatives
+- **Rate neutral (3)** to explore moderately
 
-### Per als desenvolupadors:
-- Models nous es detecten automàticament cada 30 segons
-- L'entrenament manual no bloqueja l'API
-- Pots tenir múltiples versions de models
+### For developers:
+- New models are automatically detected every 30 seconds
+- Manual training doesn't block the API
+- You can have multiple model versions
 
-## 📝 Arquitectura Tècnica
+## Technical Architecture
 
 ```
 ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
@@ -203,17 +240,60 @@ Verifica que:
                      └──────────────┘      └──────────────┘
 ```
 
-## 🚀 Roadmap Futur
+## Why v1.0 Recommendations Were Poor
 
-- [ ] Implementar cache de recomanacions
-- [ ] Afegir filtratge per gèneres
-- [ ] Sistema de login i perfils d'usuari
-- [ ] Històric de recomanacions
-- [ ] Exportar/importar models
-- [ ] Integració amb APIs externes (MyAnimeList, etc.)
+The original system had several issues:
+
+1. **min_periods=50 too low:**
+   - Correlations calculated with only 50 common users weren't reliable
+   - Led to random similarities from small sample sizes
+   - Many false positive correlations
+
+2. **Poor scoring formula:**
+   - Mixed similarity (70%) with avg_rating (30%)
+   - Didn't filter by minimum correlation strength
+   - Allowed weakly correlated animes to be recommended
+
+3. **Low popularity filter:**
+   - Only required 50 ratings per anime
+   - Recommended obscure animes without sufficient data
+
+4. **Wrong approach for negative ratings:**
+   - Searched for animes with similarity < 0.3
+   - This included animes with unreliable or no correlation
+   - Didn't prioritize good alternatives
+
+### v2.0 Improvements:
+
+1. **min_periods=100:**
+   - More reliable correlations
+   - Better signal-to-noise ratio
+
+2. **Better scoring (high ratings):**
+   - Prioritizes similarity (90%) over rating (10%)
+   - Only considers correlation > 0.5 (strong positive)
+   - Filters out weakly related animes
+
+3. **Higher popularity threshold:**
+   - Requires 100 ratings minimum
+   - Ensures recommended animes have sufficient data
+
+4. **Better negative rating handling:**
+   - Searches for animes with correlation < 0.2
+   - Prioritizes well-rated (60%) and popular (40%) alternatives
+   - Provides good animes that are genuinely different
+
+## Future Roadmap
+
+- [ ] Implement recommendation caching
+- [ ] Add genre filtering
+- [ ] Login system and user profiles
+- [ ] Recommendation history
+- [ ] Export/import models
+- [ ] Integration with external APIs (MyAnimeList, etc.)
 
 ---
 
-**Desenvolupat amb ❤️ per la comunitat anime**
+**Developed with care for the anime community**
 
-*Versió 2.0 - Octubre 2025*
+*Version 2.0 - November 2025*
