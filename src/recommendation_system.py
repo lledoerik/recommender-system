@@ -1,6 +1,6 @@
 """
-Anime Recommendation System
-Main engine with collaborative filtering and Pearson correlation
+Anime Recommendation System with Hybrid Filtering
+Combines collaborative filtering (Pearson) with content-based filtering (genres)
 """
 
 from src.models.anime import Anime
@@ -27,6 +27,7 @@ class RecommendationSystem:
         self.animeStats = None
         self.animePopularity = None
         self.animeAvgRating = None
+        self.animeGenres = {}  # New: Store genres for each anime
         self.model_dir = Path(__file__).resolve().parent.parent / model_dir
         self.anime_csv_path = Path(anime_csv_path)
         self.rating_csv_path = Path(rating_csv_path)
@@ -54,6 +55,33 @@ class RecommendationSystem:
                 "No trained model found. "
                 "Run train_model() before using the system."
             )
+    
+    def _parse_genres(self, genre_string):
+        """
+        Parse genre string into a set of genres
+        Example: "Action, Adventure, Shounen" -> {"Action", "Adventure", "Shounen"}
+        """
+        if pd.isna(genre_string) or not isinstance(genre_string, str):
+            return set()
+        return set(g.strip() for g in genre_string.split(',') if g.strip())
+    
+    def _calculate_genre_similarity(self, genres1, genres2):
+        """
+        Calculate Jaccard similarity between two sets of genres
+        Jaccard similarity = |intersection| / |union|
+        
+        Returns value between 0 (no common genres) and 1 (identical genres)
+        """
+        if not genres1 or not genres2:
+            return 0.0
+        
+        intersection = len(genres1.intersection(genres2))
+        union = len(genres1.union(genres2))
+        
+        if union == 0:
+            return 0.0
+        
+        return intersection / union
     
     def get_data_files_hash(self):
         """
@@ -136,10 +164,15 @@ class RecommendationSystem:
             # Load additional statistics if they exist
             self.animePopularity = model_data.get('animePopularity')
             self.animeAvgRating = model_data.get('animeAvgRating')
+            self.animeGenres = model_data.get('animeGenres', {})
             
             # If they don't exist, calculate them
             if self.animePopularity is None:
                 self._calculate_anime_stats()
+            
+            # If genres not in model, extract from ratings_df
+            if not self.animeGenres:
+                self._extract_genres()
             
             # Save model info
             self.current_model_version = latest_version
@@ -156,6 +189,16 @@ class RecommendationSystem:
         except Exception as e:
             print(f"Error loading model: {str(e)}")
             return False
+    
+    def _extract_genres(self):
+        """
+        Extract genres from ratings_df and store in animeGenres dict
+        """
+        if self.ratings_df is not None and 'genre' in self.ratings_df.columns:
+            for _, row in self.ratings_df[['name', 'genre']].drop_duplicates('name').iterrows():
+                anime_name = row['name']
+                genres = self._parse_genres(row['genre'])
+                self.animeGenres[anime_name] = genres
     
     def _calculate_anime_stats(self):
         """
@@ -213,6 +256,7 @@ class RecommendationSystem:
                 'animeStats': self.animeStats,
                 'animePopularity': self.animePopularity,
                 'animeAvgRating': self.animeAvgRating,
+                'animeGenres': self.animeGenres,  # Save genres
                 'version': next_version,
                 'anime_csv_path': str(self.anime_csv_path),
                 'rating_csv_path': str(self.rating_csv_path),
@@ -268,6 +312,11 @@ class RecommendationSystem:
         self.ratings_df = pd.merge(animes_df, ratings_df)
         
         print(f"   Data loaded: {len(self.ratings_df)} ratings")
+        
+        # Extract and store genres
+        print(f"\nExtracting genres...")
+        self._extract_genres()
+        print(f"   Genres extracted for {len(self.animeGenres)} animes")
         
         # Create Anime objects
         print(f"\nProcessing animes...")
@@ -364,11 +413,17 @@ class RecommendationSystem:
     
     def get_recommendations_adjusted(self, anime_name, user_rating=5, num_recommendations=6):
         """
-        Get recommendations adjusted based on user rating
+        Get recommendations using HYBRID FILTERING:
+        - Collaborative filtering (Pearson correlation)
+        - Content-based filtering (genre similarity)
+        - Rating granularity (fine-tuned behavior per 0.5 rating)
         
-        - If rating >= 4: Return similar animes (high positive correlation)
-        - If rating <= 2: Return different animes (low or negative correlation)
-        - If rating = 3: Return moderately similar animes
+        Rating ranges:
+        - 1.0-1.5: Hate it - show very different animes
+        - 2.0-2.5: Dislike - show different animes
+        - 3.0-3.5: Neutral/OK - show moderately different
+        - 4.0-4.5: Like - show similar animes
+        - 4.5-5.0: Love - show very similar animes
         
         Returns:
             tuple: (recommendations list, exact anime name used)
@@ -384,13 +439,16 @@ class RecommendationSystem:
         else:
             exact_anime_name = anime_name
         
+        # Get genres of the search anime
+        source_genres = self.animeGenres.get(exact_anime_name, set())
+        
         # Get correlations
         anime_ratings = self.userRatings_pivot[exact_anime_name]
         similar_animes = self.userRatings_pivot.corrwith(anime_ratings)
         similar_animes = similar_animes.dropna()
         
         # Create DataFrame with correlations
-        df = pd.DataFrame(similar_animes, columns=['similarity'])
+        df = pd.DataFrame(similar_animes, columns=['pearson_correlation'])
         
         # Filter by popularity (minimum 100 ratings for reliable recommendations)
         popular_animes = self.animeStats['rating'] >= 100
@@ -403,34 +461,127 @@ class RecommendationSystem:
         if self.animePopularity is not None:
             df = df.join(self.animePopularity.rename('popularity'))
         
+        # Calculate genre similarity for each anime
+        df['genre_similarity'] = df.index.map(
+            lambda x: self._calculate_genre_similarity(source_genres, self.animeGenres.get(x, set()))
+        )
+        
         # Remove the current anime from results
         df = df[df.index != exact_anime_name]
         
-        # ADJUST BASED ON USER RATING
-        if user_rating >= 4:
-            # User likes it: return most similar animes with high correlation
-            # Filter: only animes with correlation > 0.5 (strong positive correlation)
-            df = df[df['similarity'] > 0.5]
+        # FILTER OUT MOVIES/OVAs/SEQUELS FROM SAME SERIES
+        # Remove animes that are too similar in name (likely spin-offs, movies, OVAs)
+        def is_same_series(candidate_name, source_name):
+            """
+            Check if candidate is likely a movie/OVA/sequel of source anime
+            Examples:
+            - "Naruto" vs "Naruto Movie 1" -> True (remove)
+            - "Naruto" vs "Naruto Shippuuden" -> True (remove)
+            - "Naruto" vs "Hunter x Hunter" -> False (keep)
+            """
+            source_clean = source_name.lower().strip()
+            candidate_clean = candidate_name.lower().strip()
             
-            # Score: prioritize similarity heavily (90%) with some weight on avg_rating (10%)
-            df['score'] = df['similarity'] * 0.9 + (df.get('avg_rating', 7) / 10) * 0.1
-            df = df.sort_values('score', ascending=False)
+            # Remove common suffixes for comparison
+            remove_words = ['movie', 'ova', 'ona', 'special', 'tv', 'recap',
+                           'picture drama', 'specials', 'prologue', 'epilogue']
             
-        elif user_rating <= 2:
-            # User doesn't like it: return different animes
-            # Filter: animes with low correlation or negative correlation
-            df = df[df['similarity'] < 0.2]
+            for word in remove_words:
+                source_clean = source_clean.replace(word, '').strip()
+                candidate_clean = candidate_clean.replace(word, '').strip()
             
-            # Score: prioritize good rating and popularity
-            df['difference_score'] = (df.get('avg_rating', 7) / 10) * 0.6 + \
-                                    (df.get('popularity', 0) / df.get('popularity', 1).max()) * 0.4
-            df = df.sort_values('difference_score', ascending=False)
+            # Get base name (first part before colon or dash)
+            source_base = source_clean.split(':')[0].split('-')[0].strip()
+            candidate_base = candidate_clean.split(':')[0].split('-')[0].strip()
             
-        else:  # rating around 3
-            # Neutral: moderately similar animes
-            df = df[(df['similarity'] > 0.3) & (df['similarity'] < 0.6)]
-            df['score'] = df['similarity'] * 0.6 + (df.get('avg_rating', 7) / 10) * 0.4
-            df = df.sort_values('score', ascending=False)
+            # If candidate contains source base name, likely same series
+            if len(source_base) > 3:  # Avoid matching too-short names
+                if source_base in candidate_clean or candidate_base in source_clean:
+                    return True
+            
+            return False
+        
+        # Apply filter
+        df = df[~df.index.map(lambda x: is_same_series(x, exact_anime_name))]
+        
+        # RATING GRANULARITY - Different behavior for each 0.5 step
+        if user_rating >= 4.5:
+            # LOVE IT (4.5-5.0): Very similar animes
+            # Strong collaborative + strong content-based
+            df = df[df['pearson_correlation'] > 0.5]  # Strong positive correlation
+            df = df[df['genre_similarity'] > 0.3]      # At least some genre overlap
+            
+            # Score: 60% collaborative, 30% content, 10% rating
+            df['final_score'] = (
+                df['pearson_correlation'] * 0.6 + 
+                df['genre_similarity'] * 0.3 +
+                (df.get('avg_rating', 7) / 10) * 0.1
+            )
+            
+        elif user_rating >= 4.0:
+            # LIKE (4.0-4.5): Similar animes
+            # Moderate collaborative + moderate content-based
+            df = df[df['pearson_correlation'] > 0.4]  # Moderate positive correlation
+            df = df[df['genre_similarity'] > 0.2]      # Some genre overlap
+            
+            # Score: 55% collaborative, 30% content, 15% rating
+            df['final_score'] = (
+                df['pearson_correlation'] * 0.55 + 
+                df['genre_similarity'] * 0.3 +
+                (df.get('avg_rating', 7) / 10) * 0.15
+            )
+            
+        elif user_rating >= 3.5:
+            # NEUTRAL+ (3.5-4.0): Moderately similar
+            df = df[df['pearson_correlation'] > 0.2]  # Low-moderate correlation
+            df = df[df['genre_similarity'] > 0.15]     # Minimal genre overlap
+            
+            # Score: 40% collaborative, 30% content, 30% rating
+            df['final_score'] = (
+                df['pearson_correlation'] * 0.4 + 
+                df['genre_similarity'] * 0.3 +
+                (df.get('avg_rating', 7) / 10) * 0.3
+            )
+            
+        elif user_rating >= 3.0:
+            # NEUTRAL (3.0-3.5): Mixed - some overlap, some difference
+            df = df[(df['pearson_correlation'] > 0.1) & (df['pearson_correlation'] < 0.6)]
+            
+            # Score: 30% collaborative, 30% content, 40% rating
+            df['final_score'] = (
+                df['pearson_correlation'] * 0.3 + 
+                df['genre_similarity'] * 0.3 +
+                (df.get('avg_rating', 7) / 10) * 0.4
+            )
+            
+        elif user_rating >= 2.0:
+            # DISLIKE (2.0-2.5): Different animes
+            # Low/negative correlation, different genres
+            df = df[df['pearson_correlation'] < 0.2]   # Low correlation
+            df = df[df['genre_similarity'] < 0.4]       # Different genres
+            
+            # Score: Prioritize good rating and some content difference
+            df['final_score'] = (
+                (df.get('avg_rating', 7) / 10) * 0.5 +
+                (1 - df['genre_similarity']) * 0.3 +  # Reward different genres
+                (df.get('popularity', 0) / df.get('popularity', 1).max()) * 0.2
+            )
+            
+        else:
+            # HATE IT (1.0-2.0): Very different animes
+            # Negative/very low correlation, very different genres
+            df = df[df['pearson_correlation'] < 0.15]  # Very low/negative correlation
+            df = df[df['genre_similarity'] < 0.3]       # Very different genres
+            
+            # Score: Maximize difference
+            df['final_score'] = (
+                (df.get('avg_rating', 7) / 10) * 0.5 +
+                (1 - df['genre_similarity']) * 0.4 +  # Strongly reward different genres
+                (df.get('popularity', 0) / df.get('popularity', 1).max()) * 0.1
+            )
+        
+        # Sort by final score
+        df = df.sort_values('final_score', ascending=False)
         
         # Get top recommendations
         top_recommendations = df.head(num_recommendations)
@@ -439,16 +590,21 @@ class RecommendationSystem:
         for anime_name_rec in top_recommendations.index:
             anime_info = self.ratings_df[self.ratings_df['name'] == anime_name_rec].iloc[0]
             
-            # Get correlation and score
-            correlation = top_recommendations.loc[anime_name_rec, 'similarity']
+            # Get scores
+            pearson_corr = top_recommendations.loc[anime_name_rec, 'pearson_correlation']
+            genre_sim = top_recommendations.loc[anime_name_rec, 'genre_similarity']
             avg_rating = top_recommendations.loc[anime_name_rec].get('avg_rating', anime_info.get('rating', 0))
+            
+            # Calculate hybrid similarity (collaborative + content-based)
+            hybrid_similarity = (pearson_corr * 0.6 + genre_sim * 0.4)
             
             recommendations.append({
                 "title": str(anime_name_rec),
                 "score": float(round(avg_rating, 1)) if pd.notna(avg_rating) else 0.0,
                 "genre": str(anime_info.get('genre', 'Unknown')),
                 "year": None,
-                "correlation": float(round(correlation, 2)) if pd.notna(correlation) else 0.0
+                "correlation": float(round(hybrid_similarity, 2)) if pd.notna(hybrid_similarity) else 0.0,
+                "genre_match": float(round(genre_sim, 2))
             })
         
         return recommendations, exact_anime_name
@@ -476,16 +632,19 @@ class RecommendationSystem:
             
             sims = self.corrMatrix[anime_name].dropna()
             
-            # Adjust based on rating
-            if rating >= 4:
-                # User likes it: keep positive correlations
+            # Adjust based on rating with granularity
+            if rating >= 4.5:
+                sims = sims.map(lambda x: x * rating * 1.2)  # Boost high ratings
+            elif rating >= 4:
                 sims = sims.map(lambda x: x * rating)
-            elif rating <= 2:
-                # User doesn't like it: invert correlations
+            elif rating >= 3.5:
+                sims = sims.map(lambda x: x * rating * 0.8)
+            elif rating >= 3:
+                sims = sims.map(lambda x: x * rating * 0.6)
+            elif rating >= 2:
                 sims = sims.map(lambda x: -x * (6 - rating))
             else:
-                # Neutral: weight less
-                sims = sims.map(lambda x: x * rating * 0.5)
+                sims = sims.map(lambda x: -x * (7 - rating))  # Strongly negative
             
             simCandidates = pd.concat([simCandidates, sims])
         

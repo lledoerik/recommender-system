@@ -218,6 +218,18 @@ function escapeHtml(unsafe) {
         .replace(/'/g, "&#039;");
 }
 
+function getRatingLabel(rating) {
+    /**
+     * Get descriptive label for rating value
+     */
+    if (rating >= 4.5) return "Love it";
+    if (rating >= 4.0) return "Like";
+    if (rating >= 3.5) return "Neutral+";
+    if (rating >= 3.0) return "Neutral";
+    if (rating >= 2.0) return "Dislike";
+    return "Hate it";
+}
+
 function displayResults(recommendations, exactAnimeName, rating) {
     loadingIndicator.classList.add('hidden');
     animeGrid.innerHTML = '';
@@ -227,29 +239,37 @@ function displayResults(recommendations, exactAnimeName, rating) {
         return;
     }
 
-    // Different message based on rating
+    // Different message based on rating with more granularity
     let message = '';
-    if (rating >= 4) {
-        message = `Animes similar to "${exactAnimeName}"`;
-    } else if (rating <= 2) {
-        message = `Different alternatives to "${exactAnimeName}"`;
+    const ratingLabel = getRatingLabel(rating);
+    
+    if (rating >= 4.5) {
+        message = `Very similar animes to "${exactAnimeName}" (${ratingLabel})`;
+    } else if (rating >= 4.0) {
+        message = `Similar animes to "${exactAnimeName}" (${ratingLabel})`;
+    } else if (rating >= 3.5) {
+        message = `Moderately similar to "${exactAnimeName}" (${ratingLabel})`;
+    } else if (rating >= 3.0) {
+        message = `Mixed recommendations based on "${exactAnimeName}" (${ratingLabel})`;
+    } else if (rating >= 2.0) {
+        message = `Different alternatives to "${exactAnimeName}" (${ratingLabel})`;
     } else {
-        message = `Recommended animes based on "${exactAnimeName}"`;
+        message = `Very different alternatives to "${exactAnimeName}" (${ratingLabel})`;
     }
     
     resultsCount.textContent = message;
 
     recommendations.forEach(anime => {
-        const card = createAnimeCard(anime);
+        const card = createAnimeCard(anime, rating);
         animeGrid.appendChild(card);
     });
 }
 
-function createAnimeCard(anime) {
+function createAnimeCard(anime, userRating) {
     const card = document.createElement('div');
     card.className = 'anime-card';
 
-    // Calculate correlation color
+    // Calculate correlation color based on hybrid similarity
     const correlationPercent = Math.abs(anime.correlation) * 100;
     let correlationColor = '#10b981'; // green
     if (correlationPercent < 50) {
@@ -258,10 +278,28 @@ function createAnimeCard(anime) {
         correlationColor = '#f59e0b'; // orange
     }
 
-    // Similarity text based on correlation
+    // Similarity text based on correlation and user rating
     let similarityText = 'Similarity';
-    if (anime.correlation < 0) {
+    if (userRating < 3) {
         similarityText = 'Difference';
+    }
+    
+    // Genre match indicator (if available)
+    let genreMatchHtml = '';
+    if (anime.genre_match !== undefined && anime.genre_match !== null) {
+        const genrePercent = (anime.genre_match * 100).toFixed(0);
+        let genreColor = '#10b981'; // green
+        if (genrePercent < 30) {
+            genreColor = '#ef4444'; // red
+        } else if (genrePercent < 60) {
+            genreColor = '#f59e0b'; // orange
+        }
+        
+        genreMatchHtml = `
+            <div style="color: ${genreColor}; font-weight: 600; font-size: 0.85rem;">
+                Genre Match: ${genrePercent}%
+            </div>
+        `;
     }
 
     card.innerHTML = `
@@ -274,8 +312,9 @@ function createAnimeCard(anime) {
             ${anime.year ? `<div>Year: ${anime.year}</div>` : ''}
             ${anime.correlation !== undefined ? 
                 `<div style="color: ${correlationColor}; font-weight: 600;">
-                    ${similarityText}: ${(Math.abs(anime.correlation) * 100).toFixed(0)}%
+                    ${similarityText}: ${correlationPercent.toFixed(0)}%
                 </div>` : ''}
+            ${genreMatchHtml}
         </div>
     `;
 

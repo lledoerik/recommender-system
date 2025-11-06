@@ -46,7 +46,7 @@ def train_new_model():
         return False
     
     print("\n" + "="*70)
-    print("🎬 ENTRENAMENT DEL MODEL DE RECOMANACIONS D'ANIMES")
+    print("ENTRENAMENT DEL MODEL DE RECOMANACIONS D'ANIMES")
     print("="*70)
     
     if not ANIME_CSV.exists():
@@ -71,9 +71,10 @@ def train_new_model():
         print(f"   L'entrenament pot trigar diversos minuts...")
     
     try:
-        print(f"\n🚀 Iniciant entrenament...\n")
+        print(f"\nIniciant entrenament...\n")
         
         # Crear una instància temporal només per entrenar
+        # FIX: Inicialitzar TOTS els atributs necessaris
         rec_system = RecommendationSystem.__new__(RecommendationSystem)
         rec_system.animes_dict = {}
         rec_system.users_dict = {}
@@ -83,6 +84,7 @@ def train_new_model():
         rec_system.animeStats = None
         rec_system.animePopularity = None
         rec_system.animeAvgRating = None
+        rec_system.animeGenres = {}  # FIX: Inicialitzar animeGenres!
         rec_system.model_dir = root_dir / 'model'
         rec_system.anime_csv_path = ANIME_CSV
         rec_system.rating_csv_path = RATING_CSV
@@ -97,7 +99,7 @@ def train_new_model():
         print("\n" + "="*70)
         print("✅ MODEL ENTRENAT I GUARDAT!")
         print("="*70)
-        print("\n🎉 El model s'ha entrenat correctament!")
+        print("\nEl model s'ha entrenat correctament!")
         print("   L'API el detectarà i carregarà automàticament en 30 segons.")
         print("   O pots reiniciar l'aplicació per carregar-lo immediatament.")
         

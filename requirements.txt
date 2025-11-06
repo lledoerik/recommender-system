@@ -12,5 +12,8 @@ APScheduler==3.10.4
 # Detecció d'encoding (per fix_encoding.py)
 chardet==5.2.0
 
+# API requests (per MyAnimeList updater)
+requests==2.31.0
+
 # CORS i Werkzeug
 Werkzeug==3.0.1

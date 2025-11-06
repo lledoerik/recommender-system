@@ -4,7 +4,7 @@ Script per verificar i corregir l'encoding dels fitxers CSV
 Converteix automàticament a UTF-8 si cal
 
 Ús:
-    python scripts/fix_encoding.py
+    python scripts/encoding.py
 """
 
 import chardet
