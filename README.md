@@ -229,15 +229,15 @@ Verify that:
 ## Technical Architecture
 
 ```
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│   Frontend   │────▶│   Flask API  │────▶│Recommendation│
-│  JavaScript  │     │   (app.py)   │     │    System    │
-└──────────────┘     └──────────────┘     └──────────────┘
-                            │                      │
-                     ┌──────▼──────┐      ┌───────▼──────┐
-                     │  Scheduler  │      │ Pickle Models│
-                     │ (APScheduler)│      │  (v1,v2,v3) │
-                     └──────────────┘      └──────────────┘
+┌──────────────┐       ┌──────────────┐       ┌──────────────┐ 
+│   Frontend   │ ────▶ │  Flask API  │ ────▶ │Recommendation│
+│  JavaScript  │       │  (app.py)    │       │    System    │
+└──────────────┘       └──────────────┘       └──────────────┘ 
+                            │                         │
+                     ┌──────▼───────┐         ┌───────▼──────┐
+                     │  Scheduler   │         │ Pickle Models│
+                     │ (APScheduler)│         │  (v1,v2,v3)  │
+                     └──────────────┘         └──────────────┘
 ```
 
 ## Why v1.0 Recommendations Were Poor
