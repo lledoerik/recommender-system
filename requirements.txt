@@ -17,3 +17,6 @@ requests==2.31.0
 
 # CORS i Werkzeug
 Werkzeug==3.0.1
+
+# Kaggle dataset integration
+kagglehub==0.2.5

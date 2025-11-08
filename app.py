@@ -32,7 +32,7 @@ app.config["PORT"] = 5000
 # Path configuration
 DATA_DIR = Path(__file__).resolve().parent / 'data'
 ANIME_CSV = DATA_DIR / 'anime.csv'
-RATING_CSV = DATA_DIR / 'cleaned_data.csv'
+RATING_CSV = DATA_DIR / 'rating.csv'
 
 print("="*70)
 print("INITIALIZING RECOMMENDATION SYSTEM")

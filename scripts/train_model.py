@@ -24,31 +24,16 @@ def train_new_model():
     """
     DATA_DIR = root_dir / 'data'
     ANIME_CSV = DATA_DIR / 'anime.csv'
-    
-    # Provar diferents noms per al fitxer de ratings
-    possible_rating_files = [
-        'rating_balanceado.csv',
-        'cleaned_data.csv', 
-        'rating.csv'
-    ]
-    
-    RATING_CSV = None
-    for filename in possible_rating_files:
-        test_path = DATA_DIR / filename
-        if test_path.exists():
-            RATING_CSV = test_path
-            print(f"✓ Utilitzant fitxer de ratings: {filename}")
-            break
-    
-    if RATING_CSV is None:
-        print(f"\n❌ ERROR: No s'ha trobat cap fitxer de ratings a {DATA_DIR}")
-        print(f"   Fitxers cercats: {', '.join(possible_rating_files)}")
-        return False
+    RATING_CSV = DATA_DIR / 'rating.csv'
     
     print("\n" + "="*70)
     print("ENTRENAMENT DEL MODEL DE RECOMANACIONS D'ANIMES")
     print("="*70)
-    
+
+    if RATING_CSV is None:
+        print(f"\n❌ ERROR: No s'ha trobat {RATING_CSV}")
+        return False
+
     if not ANIME_CSV.exists():
         print(f"\n❌ ERROR: No s'ha trobat {ANIME_CSV}")
         return False
@@ -114,10 +99,10 @@ def train_new_model():
         if "encoding" in str(e).lower():
             print("\n💡 CONSELL: Sembla un problema d'encoding.")
             print("   Prova de convertir els CSV a UTF-8:")
-            print("   iconv -f ISO-8859-1 -t UTF-8 data/anime.csv > data/anime_utf8.csv")
+            print("   python scripts/encoding.py")
         elif "memory" in str(e).lower():
             print("\n💡 CONSELL: Problema de memòria.")
-            print("   Considera reduir la mida del dataset amb data_cleaner.py")
+            print("   Les dades són massa grans per la RAM disponible.")
         
         return False
 

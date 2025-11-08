@@ -15,7 +15,7 @@ from datetime import datetime
 
 class RecommendationSystem:
 
-    def __init__(self, anime_csv_path='data/anime.csv', rating_csv_path='data/cleaned_data.csv', model_dir='model'):
+    def __init__(self, anime_csv_path='data/anime.csv', rating_csv_path='data/rating.csv', model_dir='model'):
         """
         Initialize the recommendation system by loading the most recent model
         """
@@ -69,7 +69,7 @@ class RecommendationSystem:
         """
         Calculate Jaccard similarity between two sets of genres
         Jaccard similarity = |intersection| / |union|
-        
+
         Returns value between 0 (no common genres) and 1 (identical genres)
         """
         if not genres1 or not genres2:

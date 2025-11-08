@@ -39,7 +39,6 @@ def fix_csv_encoding():
     csv_files = [
         'anime.csv',
         'rating.csv',
-        'cleaned_data.csv'
     ]
     
     print("="*70)
@@ -105,7 +104,7 @@ def fix_csv_encoding():
     print("\n💡 CONSELLS:")
     print("   - Si encara tens problemes amb caràcters, prova:")
     print("     iconv -f ISO-8859-1 -t UTF-8 data/anime.csv > data/anime_utf8.csv")
-    print("   - Recorda re-entrenar el model després de convertir els CSV")
+    print("   - Recorda re-entrenar el model després de convertir els CSV:")
     print("     python scripts/train_model.py")
 
 if __name__ == "__main__":
