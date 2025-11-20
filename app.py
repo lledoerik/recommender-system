@@ -1,8 +1,3 @@
-"""
-Flask Application with Anime Recommendation System
-Includes automatic scheduler to train model daily at 2:30 AM
-"""
-
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from pathlib import Path
