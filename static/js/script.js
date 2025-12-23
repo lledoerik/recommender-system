@@ -1,122 +1,77 @@
-// Star rating system
-const stars = document.querySelectorAll('.star');
-const ratingValue = document.getElementById('ratingValue');
-const ratingInput = document.getElementById('ratingInput');
-let currentRating = 0;
-
-stars.forEach((star, index) => {
-    // Click to select rating
-    star.addEventListener('click', (e) => {
-        const rect = star.getBoundingClientRect();
-        const clickX = e.clientX - rect.left;
-        const starWidth = rect.width;
-        const starNumber = index + 1;
-
-        if (clickX < starWidth / 2) {
-            currentRating = starNumber - 0.5;
-        } else {
-            currentRating = starNumber;
-        }
-
-        updateRating(currentRating);
-    });
-
-    // Hover for preview
-    star.addEventListener('mousemove', (e) => {
-        const rect = star.getBoundingClientRect();
-        const hoverX = e.clientX - rect.left;
-        const starWidth = rect.width;
-        const starNumber = index + 1;
-
-        let previewRating;
-        if (hoverX < starWidth / 2) {
-            previewRating = starNumber - 0.5;
-        } else {
-            previewRating = starNumber;
-        }
-
-        highlightStars(previewRating);
-    });
-});
-
-document.getElementById('starRating').addEventListener('mouseleave', () => {
-    highlightStars(currentRating);
-});
-
-function updateRating(rating) {
-    currentRating = rating;
-    ratingInput.value = rating;
-    ratingValue.textContent = `${rating}/5`;
-    highlightStars(rating);
-}
-
-function highlightStars(rating) {
-    stars.forEach((star, index) => {
-        const starNumber = index + 1;
-
-        star.classList.remove('full', 'half');
-
-        if (rating >= starNumber) {
-            star.classList.add('full');
-        } else if (rating >= starNumber - 0.5) {
-            star.classList.add('half');
-        }
-    });
-}
-
-// Form handling
-const form = document.getElementById('recommendForm');
-const resultsSection = document.getElementById('resultsSection');
-const animeGrid = document.getElementById('animeGrid');
-const loadingIndicator = document.getElementById('loadingIndicator');
-const resultsCount = document.getElementById('resultsCount');
-
 // API URL - dynamic based on environment
 const API_URL = window.location.origin;
 
-// Store last search for multiple choice handling
-let lastSearch = null;
+// DOM Elements
+const form = document.getElementById('recommendForm');
+const resultsSection = document.getElementById('resultsSection');
+const mediaGrid = document.getElementById('mediaGrid');
+const loadingIndicator = document.getElementById('loadingIndicator');
+const resultsCount = document.getElementById('resultsCount');
+const mediaSearchInput = document.getElementById('mediaSearch');
 
+// Modal Elements
+const modalOverlay = document.getElementById('modalOverlay');
+const modalTitle = document.getElementById('modalTitle');
+const modalSubtitle = document.getElementById('modalSubtitle');
+const modalContent = document.getElementById('modalContent');
+const modalClose = document.getElementById('modalClose');
+
+// Modal functions
+function openModal(title, subtitle) {
+    modalTitle.textContent = title;
+    modalSubtitle.textContent = subtitle;
+    modalOverlay.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeModal() {
+    modalOverlay.classList.add('hidden');
+    document.body.style.overflow = '';
+}
+
+// Close modal on button click
+modalClose.addEventListener('click', closeModal);
+
+// Close modal on overlay click
+modalOverlay.addEventListener('click', (e) => {
+    if (e.target === modalOverlay) {
+        closeModal();
+    }
+});
+
+// Close modal on Escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !modalOverlay.classList.contains('hidden')) {
+        closeModal();
+    }
+});
+
+// Form submission
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    const animeName = document.getElementById('animeSearch').value;
-    const rating = currentRating;
+    const title = mediaSearchInput.value.trim();
+    if (!title) return;
 
-    if (rating === 0) {
-        alert('Please select a rating!');
-        return;
-    }
-
-    // Save search
-    lastSearch = { anime: animeName, rating: rating };
-
-    // Show results section and loading
+    // Show loading
     resultsSection.classList.remove('hidden');
     loadingIndicator.classList.remove('hidden');
-    animeGrid.innerHTML = '';
-
-    // Smooth scroll to results
-    resultsSection.scrollIntoView({behavior: 'smooth'});
+    mediaGrid.innerHTML = '';
+    resultsSection.scrollIntoView({ behavior: 'smooth' });
 
     try {
-        // Call Flask API
         const response = await fetch(`${API_URL}/api/recommendations`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                anime: animeName,
-                rating: rating
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title })
         });
 
         if (response.status === 300) {
-            // Multiple matches - show selector
+            // Multiple matches - show modal selector
             const data = await response.json();
-            showAnimeSelector(data.matches, data.query);
             loadingIndicator.classList.add('hidden');
+            resultsSection.classList.add('hidden');
+            showMediaSelector(data.matches, data.query);
             return;
         }
 
@@ -126,91 +81,130 @@ form.addEventListener('submit', async (e) => {
         }
 
         const data = await response.json();
-        displayResults(data.recommendations, data.anime, rating);
+        displayResults(data.recommendations, data.source);
 
     } catch (error) {
         console.error('Error:', error);
         loadingIndicator.classList.add('hidden');
-
-        let errorMessage = 'Error getting recommendations.';
-
-        if (error.message.includes("not found")) {
-            errorMessage = `Anime "${animeName}" not found. Please try another name.`;
-        } else if (error.message.includes('Failed to fetch')) {
-            errorMessage = 'Cannot connect to server. Make sure the Flask API is running.';
-        } else {
-            errorMessage = error.message;
-        }
-
-        animeGrid.innerHTML = `<div class="error-message">${errorMessage}</div>`;
+        mediaGrid.innerHTML = `<div class="error-message">${escapeHtml(error.message)}</div>`;
     }
 });
 
-function showAnimeSelector(matches, query) {
-    /**
-     * Show selector when there are multiple matches
-     */
-    animeGrid.innerHTML = '';
-    
-    const selectorDiv = document.createElement('div');
-    selectorDiv.className = 'anime-selector';
-    selectorDiv.innerHTML = `
-        <h3>Found ${matches.length} animes with "${query}"</h3>
-        <p>Select the correct anime:</p>
-        <div class="anime-options">
-            ${matches.map((match, index) => `
-                <button class="anime-option" data-anime="${escapeHtml(match.name)}" data-index="${index}">
-                    <div class="option-title">${escapeHtml(match.name)}</div>
-                    ${match.genre ? `<div class="option-genre">Genre: ${escapeHtml(match.genre)}</div>` : ''}
+function showMediaSelector(matches, query) {
+    // Open modal with options
+    openModal(
+        `Which "${query}" do you mean?`,
+        `We found ${matches.length} titles matching your search. Please select one:`
+    );
+
+    // Generate modal content
+    modalContent.innerHTML = `
+        <div class="modal-grid">
+            ${matches.map((match) => `
+                <button type="button" class="modal-option" data-id="${escapeHtml(match.id)}">
+                    ${match.poster_url
+                        ? `<img src="${match.poster_url}" alt="${escapeHtml(match.title)}" class="modal-option-poster" loading="lazy">`
+                        : `<div class="modal-option-no-poster">🎬</div>`
+                    }
+                    <div class="modal-option-content">
+                        <div class="modal-option-title">${escapeHtml(match.title)}</div>
+                        <div class="modal-option-meta">
+                            <span class="source-badge ${match.source}">${formatSource(match.source)}</span>
+                            ${match.year ? `<span class="year-badge">${match.year}</span>` : ''}
+                        </div>
+                        ${match.genre ? `<div class="modal-option-genre">${escapeHtml(match.genre)}</div>` : ''}
+                    </div>
                 </button>
             `).join('')}
         </div>
     `;
-    
-    animeGrid.appendChild(selectorDiv);
-    
-    // Add event listeners to buttons
-    document.querySelectorAll('.anime-option').forEach(button => {
+
+    // Add click handlers to modal options
+    modalContent.querySelectorAll('.modal-option').forEach(button => {
         button.addEventListener('click', async () => {
-            const selectedAnime = button.dataset.anime;
-            
-            // Re-do search with specific anime
+            const mediaId = button.dataset.id;
+
+            // Close modal and show loading
+            closeModal();
+            resultsSection.classList.remove('hidden');
             loadingIndicator.classList.remove('hidden');
-            animeGrid.innerHTML = '';
-            
+            mediaGrid.innerHTML = '';
+            resultsSection.scrollIntoView({ behavior: 'smooth' });
+
             try {
                 const response = await fetch(`${API_URL}/api/recommendations`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        anime: selectedAnime,
-                        rating: lastSearch.rating
-                    })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ media_id: mediaId })
                 });
-                
-                if (!response.ok) {
-                    throw new Error('Error getting recommendations');
-                }
-                
+
+                if (!response.ok) throw new Error('Error getting recommendations');
+
                 const data = await response.json();
-                displayResults(data.recommendations, data.anime, lastSearch.rating);
-                
+                displayResults(data.recommendations, data.source);
             } catch (error) {
-                console.error('Error:', error);
                 loadingIndicator.classList.add('hidden');
-                animeGrid.innerHTML = `<div class="error-message">Error getting recommendations.</div>`;
+                mediaGrid.innerHTML = `<div class="error-message">${escapeHtml(error.message)}</div>`;
             }
         });
     });
 }
 
+function displayResults(recommendations, source) {
+    loadingIndicator.classList.add('hidden');
+    mediaGrid.innerHTML = '';
+
+    if (!recommendations || recommendations.length === 0) {
+        mediaGrid.innerHTML = '<div class="error-message">No recommendations found.</div>';
+        return;
+    }
+
+    resultsCount.textContent = `Similar to "${source.title}" (${formatSource(source.source_type)})`;
+
+    recommendations.forEach(media => {
+        const card = createMediaCard(media);
+        mediaGrid.appendChild(card);
+    });
+}
+
+function createMediaCard(media) {
+    const card = document.createElement('div');
+    card.className = 'media-card';
+
+    card.innerHTML = `
+        ${media.poster_url ? `
+            <img class="media-poster" src="${media.poster_url}" alt="${escapeHtml(media.title)}" loading="lazy">
+        ` : '<div class="media-poster-placeholder"></div>'}
+        <div class="media-content">
+            <div class="media-title">${escapeHtml(media.title)}</div>
+            <div class="media-meta">
+                <span class="source-badge ${media.source}">${formatSource(media.source)}</span>
+                ${media.year ? `<span class="year-badge">${media.year}</span>` : ''}
+            </div>
+            ${media.score || media.genre ? `
+                <div class="media-info">
+                    ${media.score ? `<div class="media-score">${media.score}</div>` : ''}
+                    ${media.genre ? `<div class="media-genre">${escapeHtml(media.genre)}</div>` : ''}
+                </div>
+            ` : ''}
+        </div>
+    `;
+
+    return card;
+}
+
+function formatSource(source) {
+    const labels = {
+        'tmdb_movie': 'Movie',
+        'tmdb_tv': 'TV',
+        'anilist': 'Anime'
+    };
+    return labels[source] || source;
+}
+
 function escapeHtml(unsafe) {
-    /**
-     * Escape HTML characters to prevent XSS
-     */
-    return unsafe
+    if (!unsafe) return '';
+    return String(unsafe)
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
@@ -218,220 +212,15 @@ function escapeHtml(unsafe) {
         .replace(/'/g, "&#039;");
 }
 
-function getRatingLabel(rating) {
-    /**
-     * Get descriptive label for rating value
-     */
-    if (rating >= 4.5) return "Love it";
-    if (rating >= 4.0) return "Like";
-    if (rating >= 3.5) return "Neutral+";
-    if (rating >= 3.0) return "Neutral";
-    if (rating >= 2.0) return "Dislike";
-    return "Hate it";
-}
-
-function displayResults(recommendations, exactAnimeName, rating) {
-    loadingIndicator.classList.add('hidden');
-    animeGrid.innerHTML = '';
-
-    if (!recommendations || recommendations.length === 0) {
-        animeGrid.innerHTML = '<div class="error-message">No recommendations found.</div>';
-        return;
-    }
-
-    // Different message based on rating with more granularity
-    let message = '';
-    const ratingLabel = getRatingLabel(rating);
-    
-    if (rating >= 4.5) {
-        message = `Very similar animes to "${exactAnimeName}" (${ratingLabel})`;
-    } else if (rating >= 4.0) {
-        message = `Similar animes to "${exactAnimeName}" (${ratingLabel})`;
-    } else if (rating >= 3.5) {
-        message = `Moderately similar to "${exactAnimeName}" (${ratingLabel})`;
-    } else if (rating >= 3.0) {
-        message = `Mixed recommendations based on "${exactAnimeName}" (${ratingLabel})`;
-    } else if (rating >= 2.0) {
-        message = `Different alternatives to "${exactAnimeName}" (${ratingLabel})`;
-    } else {
-        message = `Very different alternatives to "${exactAnimeName}" (${ratingLabel})`;
-    }
-    
-    resultsCount.textContent = message;
-
-    recommendations.forEach(anime => {
-        const card = createAnimeCard(anime, rating);
-        animeGrid.appendChild(card);
-    });
-}
-
-function createAnimeCard(anime, userRating) {
-    const card = document.createElement('div');
-    card.className = 'anime-card';
-
-    // Calculate correlation color based on hybrid similarity
-    const correlationPercent = Math.abs(anime.correlation) * 100;
-    let correlationColor = '#10b981'; // green
-    if (correlationPercent < 50) {
-        correlationColor = '#ef4444'; // red
-    } else if (correlationPercent < 70) {
-        correlationColor = '#f59e0b'; // orange
-    }
-
-    // Similarity text based on correlation and user rating
-    let similarityText = 'Similarity';
-    if (userRating < 3) {
-        similarityText = 'Difference';
-    }
-    
-    // Genre match indicator (if available)
-    let genreMatchHtml = '';
-    if (anime.genre_match !== undefined && anime.genre_match !== null) {
-        const genrePercent = (anime.genre_match * 100).toFixed(0);
-        let genreColor = '#10b981'; // green
-        if (genrePercent < 30) {
-            genreColor = '#ef4444'; // red
-        } else if (genrePercent < 60) {
-            genreColor = '#f59e0b'; // orange
-        }
-        
-        genreMatchHtml = `
-            <div style="color: ${genreColor}; font-weight: 600; font-size: 0.85rem;">
-                Genre Match: ${genrePercent}%
-            </div>
-        `;
-    }
-
-    card.innerHTML = `
-        <div class="anime-title">${escapeHtml(anime.title)}</div>
-        <div class="anime-info">
-            <div class="anime-score">
-                ★ ${anime.score}
-            </div>
-            ${anime.genre ? `<div>Genre: ${escapeHtml(anime.genre)}</div>` : ''}
-            ${anime.year ? `<div>Year: ${anime.year}</div>` : ''}
-            ${anime.correlation !== undefined ? 
-                `<div style="color: ${correlationColor}; font-weight: 600;">
-                    ${similarityText}: ${correlationPercent.toFixed(0)}%
-                </div>` : ''}
-            ${genreMatchHtml}
-        </div>
-    `;
-
-    return card;
-}
-
-// ============================================================================
-// FOOTER FUNCTIONALITY - Model Information
-// ============================================================================
-
-async function loadModelInfo() {
-    /**
-     * Load current model information and update footer
-     * This function is called when the page loads
-     */
+// Load system info on page load
+document.addEventListener('DOMContentLoaded', async () => {
     try {
-        const response = await fetch(`${API_URL}/api/model-info`);
-        
-        if (!response.ok) {
-            console.error('Could not get model information');
-            return;
+        const response = await fetch(`${API_URL}/api/system-info`);
+        if (response.ok) {
+            const info = await response.json();
+            console.log('System info:', info);
         }
-        
-        const modelInfo = await response.json();
-        
-        // Update footer with model information
-        updateFooter(modelInfo);
-        
     } catch (error) {
-        console.error('Error loading model info:', error);
-        // If error, show basic information
-        updateFooter({
-            version: '?',
-            num_animes: '?',
-            num_users: '?'
-        });
+        console.error('Could not load system info:', error);
     }
-}
-
-function updateFooter(modelInfo) {
-    /**
-     * Update footer content with model information
-     * 
-     * @param {Object} modelInfo - Object with model information
-     */
-    const footer = document.getElementById('footer');
-    
-    if (!footer) return;
-    
-    // Format date if it exists
-    let loadedDate = '';
-    if (modelInfo.loaded_at) {
-        const date = new Date(modelInfo.loaded_at);
-        loadedDate = ` | Loaded: ${date.toLocaleDateString('en-US')}`;
-    }
-    
-    // Indicator if training
-    let trainingBadge = '';
-    if (modelInfo.training_in_progress) {
-        trainingBadge = ' <span class="training-badge">Training...</span>';
-    }
-    
-    // Update footer HTML
-    footer.innerHTML = `
-        <div class="footer-content">
-            <div class="model-info">
-                Model v${modelInfo.version || '?'}${trainingBadge}
-            </div>
-            <div class="stats-info">
-                ${modelInfo.num_animes || '?'} animes | 
-                ${modelInfo.num_users || '?'} users${loadedDate}
-            </div>
-        </div>
-    `;
-}
-
-// ============================================================================
-// AUTOCOMPLETE (optional)
-// ============================================================================
-
-const animeSearchInput = document.getElementById('animeSearch');
-let availableAnimes = [];
-
-async function loadAvailableAnimes() {
-    try {
-        const response = await fetch(`${API_URL}/api/animes`);
-        const data = await response.json();
-        return data.animes;
-    } catch (error) {
-        console.error('Error loading animes:', error);
-        return [];
-    }
-}
-
-loadAvailableAnimes().then(animes => {
-    availableAnimes = animes;
-});
-
-animeSearchInput.addEventListener('input', (e) => {
-    const query = e.target.value.toLowerCase();
-    if (query.length > 2) {
-        const suggestions = availableAnimes.filter(anime =>
-            anime.name.toLowerCase().includes(query)
-        ).slice(0, 5);
-        // Here you can show suggestions if you want to implement a dropdown
-        console.log('Suggestions:', suggestions);
-    }
-});
-
-// ============================================================================
-// INITIALIZATION
-// ============================================================================
-
-// Load model info when page loads
-document.addEventListener('DOMContentLoaded', () => {
-    loadModelInfo();
-    
-    // Update every 30 seconds to detect if training
-    setInterval(loadModelInfo, 30000);
 });

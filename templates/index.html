@@ -4,53 +4,37 @@
     <meta charset="UTF-8">
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Intelligent anime recommendation system based on your preferences">
-    <meta name="author" content="Anime Recommender System">
-    
-    <title>Anime Recommender - Discover new animes</title>
-    
+    <meta name="description" content="Discover movies, TV shows, and anime based on what you love">
+    <meta name="author" content="Media Recommender System">
+
+    <title>Media Recommender - Discover Your Next Watch</title>
+
     <!-- Styles -->
     <link rel="stylesheet" href="/static/css/style.css">
     <link rel="icon" href="https://i.ibb.co/wFc2StFM/recomanador.png" type="image/png">
-    
-    <!-- Fonts for Japanese character support -->
+
+    <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    
-    <style>
-        /* Inline styles to ensure UTF-8 */
-        @charset "UTF-8";
-        
-        /* Font stack with Japanese support */
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 
-                         'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 
-                         'Meiryo', 'MS PGothic', 'Yu Gothic', 'YuGothic',
-                         Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-        }
-    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>Anime Recommender</h1>
-            <p class="subtitle">Discover new animes based on your preferences</p>
-            <p class="subtitle" style="font-size: 0.9rem; margin-top: 10px; color: #64748b;">
-                Rate high the animes you like to find similar ones, 
-                or rate low to discover different alternatives!
-            </p>
+            <h1>Media Recommender</h1>
+            <p class="subtitle">Discover movies, TV shows, and anime based on what you love</p>
         </header>
-        
+
         <div class="search-section">
             <form id="recommendForm">
                 <div class="form-group">
-                    <label for="animeSearch">Search for an anime</label>
+                    <label for="mediaSearch">Enter a movie, TV show, or anime you like</label>
                     <div class="search-wrapper">
                         <input
                             type="text"
-                            id="animeSearch"
-                            name="animeSearch"
-                            placeholder="Enter anime name..."
+                            id="mediaSearch"
+                            name="mediaSearch"
+                            placeholder="e.g., Inception, Breaking Bad, Death Note..."
                             required
                             autocomplete="off"
                         >
@@ -58,23 +42,8 @@
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label>Rating</label>
-                    <div class="rating-container">
-                        <div class="stars" id="starRating">
-                            <span class="star" data-value="1">★</span>
-                            <span class="star" data-value="2">★</span>
-                            <span class="star" data-value="3">★</span>
-                            <span class="star" data-value="4">★</span>
-                            <span class="star" data-value="5">★</span>
-                        </div>
-                        <span class="rating-value" id="ratingValue">0/5</span>
-                    </div>
-                    <input type="hidden" id="ratingInput" name="rating" value="0">
-                </div>
-
                 <button type="submit" class="btn" id="submitBtn">
-                    Show Recommendations
+                    Find Similar Titles
                 </button>
             </form>
         </div>
@@ -86,26 +55,35 @@
             </div>
 
             <div id="loadingIndicator" class="loading hidden">
-                <p>Loading recommendations...</p>
+                <p>Finding similar titles...</p>
             </div>
 
-            <div class="anime-grid" id="animeGrid"></div>
+            <div class="media-grid" id="mediaGrid"></div>
         </div>
     </div>
-    
-    <!-- Footer with model information -->
+
     <footer class="footer" id="footer">
         <div class="footer-content">
-            <div class="model-info">
-                <span>Model v?</span>
-            </div>
-            <div class="stats-info">
-                Loading information...
+            <div class="source-info">
+                Powered by TMDB &amp; AniList
             </div>
         </div>
     </footer>
-    
-    <!-- JavaScript -->
+
+    <!-- Modal for multiple matches -->
+    <div class="modal-overlay hidden" id="modalOverlay">
+        <div class="modal" id="modal">
+            <button type="button" class="modal-close" id="modalClose">&times;</button>
+            <div class="modal-header">
+                <h3 id="modalTitle">Select the correct title</h3>
+                <p id="modalSubtitle">We found multiple matches for your search</p>
+            </div>
+            <div class="modal-content" id="modalContent">
+                <!-- Options will be inserted here -->
+            </div>
+        </div>
+    </div>
+
     <script src="/static/js/script.js" charset="UTF-8"></script>
 </body>
 </html>

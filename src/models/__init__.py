@@ -1,5 +1,3 @@
-# Models de dades per al sistema
-from .anime import Anime
-from .user import User
+from .media import Media, MediaSource
 
-__all__ = ['Anime', 'User']
+__all__ = ['Media', 'MediaSource']

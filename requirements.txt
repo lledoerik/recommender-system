@@ -1,22 +1,12 @@
-# Flask i extensions
+# Flask and extensions
 flask==3.0.0
 flask-cors==4.0.0
 
-# Data processing i ML
-pandas==2.1.3
-numpy==1.26.2
-
-# Scheduler per tasques automàtiques
-APScheduler==3.10.4
-
-# Detecció d'encoding (per fix_encoding.py)
-chardet==5.2.0
-
-# API requests (per MyAnimeList updater)
+# HTTP requests for APIs
 requests==2.31.0
 
-# CORS i Werkzeug
-Werkzeug==3.0.1
+# Environment variables
+python-dotenv==1.0.0
 
-# Kaggle dataset integration
-kagglehub==0.2.5
+# CORS and Werkzeug
+Werkzeug==3.0.1
