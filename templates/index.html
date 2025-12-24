@@ -4,10 +4,10 @@
     <meta charset="UTF-8">
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Discover movies, TV shows, and anime based on what you love">
-    <meta name="author" content="Media Recommender System">
+    <meta name="description" content="L'oracle que endevina el teu pròxim visionat">
+    <meta name="author" content="Pitia">
 
-    <title>Media Recommender - Discover Your Next Watch</title>
+    <title>Pitia - L'Oracle del Cinema</title>
 
     <!-- Styles -->
     <link rel="stylesheet" href="/static/css/style.css">
@@ -21,14 +21,14 @@
 <body>
     <div class="container">
         <header>
-            <h1>Media Recommender</h1>
-            <p class="subtitle">Discover movies, TV shows, and anime based on what you love</p>
+            <h1>Pitia</h1>
+            <p class="subtitle">L'oracle de Delfos et revela el teu pròxim visionat</p>
         </header>
 
         <div class="search-section">
             <form id="recommendForm">
                 <div class="form-group">
-                    <label for="mediaSearch">Enter a movie, TV show, or anime you like</label>
+                    <label for="mediaSearch">Consulta l'oracle amb una pel·lícula, sèrie o anime</label>
                     <div class="search-wrapper">
                         <input
                             type="text"
@@ -43,19 +43,19 @@
                 </div>
 
                 <button type="submit" class="btn" id="submitBtn">
-                    Find Similar Titles
+                    Consulta l'Oracle
                 </button>
             </form>
         </div>
 
         <div class="results-section hidden" id="resultsSection">
             <div class="results-header">
-                <h2>Recommendations for you</h2>
+                <h2>La profecia de l'oracle</h2>
                 <p class="results-count" id="resultsCount"></p>
             </div>
 
             <div id="loadingIndicator" class="loading hidden">
-                <p>Finding similar titles...</p>
+                <p>L'oracle medita la seva visió...</p>
             </div>
 
             <div class="media-grid" id="mediaGrid"></div>
@@ -65,7 +65,7 @@
     <footer class="footer" id="footer">
         <div class="footer-content">
             <div class="source-info">
-                Powered by TMDB &amp; AniList
+                Les visions provenen de TMDB &amp; AniList
             </div>
         </div>
     </footer>
@@ -75,8 +75,8 @@
         <div class="modal" id="modal">
             <button type="button" class="modal-close" id="modalClose">&times;</button>
             <div class="modal-header">
-                <h3 id="modalTitle">Select the correct title</h3>
-                <p id="modalSubtitle">We found multiple matches for your search</p>
+                <h3 id="modalTitle">Aclareix la teva consulta</h3>
+                <p id="modalSubtitle">L'oracle ha trobat múltiples visions</p>
             </div>
             <div class="modal-content" id="modalContent">
                 <!-- Options will be inserted here -->

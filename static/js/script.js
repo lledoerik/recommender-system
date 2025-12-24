@@ -77,7 +77,7 @@ form.addEventListener('submit', async (e) => {
 
         if (!response.ok) {
             const errorData = await response.json();
-            throw new Error(errorData.error || 'Error getting recommendations');
+            throw new Error(errorData.error || 'L\'oracle no pot respondre en aquest moment');
         }
 
         const data = await response.json();
@@ -93,8 +93,8 @@ form.addEventListener('submit', async (e) => {
 function showMediaSelector(matches, query) {
     // Open modal with options
     openModal(
-        `Which "${query}" do you mean?`,
-        `We found ${matches.length} titles matching your search. Please select one:`
+        `Quina visió de "${query}" cerques?`,
+        `L'oracle ha trobat ${matches.length} visions. Selecciona'n una:`
     );
 
     // Generate modal content
@@ -138,7 +138,7 @@ function showMediaSelector(matches, query) {
                     body: JSON.stringify({ media_id: mediaId })
                 });
 
-                if (!response.ok) throw new Error('Error getting recommendations');
+                if (!response.ok) throw new Error('L\'oracle no pot respondre en aquest moment');
 
                 const data = await response.json();
                 displayResults(data.recommendations, data.source);
@@ -155,11 +155,11 @@ function displayResults(recommendations, source) {
     mediaGrid.innerHTML = '';
 
     if (!recommendations || recommendations.length === 0) {
-        mediaGrid.innerHTML = '<div class="error-message">No recommendations found.</div>';
+        mediaGrid.innerHTML = '<div class="error-message">L\'oracle no ha tingut cap visió.</div>';
         return;
     }
 
-    resultsCount.textContent = `Similar to "${source.title}" (${formatSource(source.source_type)})`;
+    resultsCount.textContent = `Visions relacionades amb "${source.title}" (${formatSource(source.source_type)})`;
 
     recommendations.forEach(media => {
         const card = createMediaCard(media);
@@ -195,8 +195,8 @@ function createMediaCard(media) {
 
 function formatSource(source) {
     const labels = {
-        'tmdb_movie': 'Movie',
-        'tmdb_tv': 'TV',
+        'tmdb_movie': 'Pel·lícula',
+        'tmdb_tv': 'Sèrie',
         'anilist': 'Anime'
     };
     return labels[source] || source;
