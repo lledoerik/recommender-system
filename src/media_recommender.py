@@ -1,4 +1,5 @@
 from typing import List, Optional, Tuple, Dict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import sys
 from pathlib import Path
 
@@ -65,8 +66,9 @@ class MediaRecommendationSystem:
         self,
         title: str = None,
         media_id: str = None,
-        num_recommendations: int = None
-    ) -> Tuple[Optional[List[Dict]], Optional[Media]]:
+        num_recommendations: int = None,
+        offset: int = 0
+    ) -> Tuple[Optional[List[Dict]], Optional[Media], int]:
         """
         Get recommendations based on a title or media_id.
 
@@ -74,9 +76,10 @@ class MediaRecommendationSystem:
             title: Media title to base recommendations on
             media_id: Optional specific media ID (if known)
             num_recommendations: Number of results (default from config)
+            offset: Starting position for pagination
 
         Returns:
-            Tuple of (recommendations list, source media object)
+            Tuple of (recommendations list, source media object, total available)
         """
         num_recs = num_recommendations or Config.NUM_RECOMMENDATIONS
 
@@ -91,17 +94,18 @@ class MediaRecommendationSystem:
                 source_media = self._get_media_details(search_results[0].id)
 
         if not source_media:
-            return None, None
+            return None, None, 0
 
         # Step 2: Gather candidates from multiple sources
         candidates = self._gather_candidates(source_media)
 
         # Step 3: Calculate similarity and rank
         ranked = self.similarity.rank_candidates(source_media, candidates)
+        total_available = len(ranked)
 
-        # Step 4: Format results
+        # Step 4: Format results with pagination
         recommendations = []
-        for media, similarity in ranked[:num_recs]:
+        for media, similarity in ranked[offset:offset + num_recs]:
             recommendations.append({
                 "id": media.id,
                 "title": media.title,
@@ -119,7 +123,7 @@ class MediaRecommendationSystem:
                 )
             })
 
-        return recommendations, source_media
+        return recommendations, source_media, total_available
 
     def _get_media_details(self, media_id: str) -> Optional[Media]:
         """Get full details for a media item, with caching"""
@@ -142,69 +146,86 @@ class MediaRecommendationSystem:
         """
         Gather candidate recommendations from all relevant sources.
         Uses API's own recommendations + genre-based search.
+        Optimized with parallel API calls.
         """
-        candidates = []
-
         # Check cache first
         cached_similar = self.cache.get_similar(source.id)
         if cached_similar:
             return cached_similar
 
-        # Strategy 1: Get API's own recommendations
-        if source.source in [MediaSource.TMDB_MOVIE, MediaSource.TMDB_TV]:
-            api_recs = self.tmdb.get_similar(source, limit=20)
-            candidates.extend(api_recs)
-        elif source.source == MediaSource.ANILIST:
-            api_recs = self.anilist.get_similar(source, limit=20)
-            candidates.extend(api_recs)
+        candidates = []
+        tasks = []
 
-        # Strategy 2: Search by primary genre across sources
-        if source.genres:
-            genres_list = list(source.genres)
-            primary_genre = genres_list[0] if genres_list else None
+        # Prepare all API tasks to run in parallel
+        with ThreadPoolExecutor(max_workers=6) as executor:
+            # Strategy 1: Get API's own recommendations
+            if source.source in [MediaSource.TMDB_MOVIE, MediaSource.TMDB_TV]:
+                tasks.append(executor.submit(self.tmdb.get_similar, source, 20))
+            elif source.source == MediaSource.ANILIST:
+                tasks.append(executor.submit(self.anilist.get_similar, source, 20))
 
-            if primary_genre:
-                # Search TMDB by genre keywords
-                if source.source != MediaSource.ANILIST:
-                    genre_results = self.tmdb.search(primary_genre, 'multi')
-                    candidates.extend(genre_results[:10])
+            # Strategy 2 & 3: Genre-based searches (parallel)
+            if source.genres:
+                genres_list = list(source.genres)[:2]
 
-                # Search AniList by genre
-                genre_results = self.anilist.search(primary_genre)
-                candidates.extend(genre_results[:10])
+                for genre in genres_list:
+                    # Cross-source searches
+                    if source.source == MediaSource.ANILIST:
+                        tasks.append(executor.submit(self.tmdb.search, genre, 'multi', 8))
+                    else:
+                        tasks.append(executor.submit(self.anilist.search, genre, 8))
 
-        # Strategy 3: Cross-source recommendations
-        if source.source == MediaSource.ANILIST and source.genres:
-            # If source is anime, search TMDB for similar genres
-            for genre in list(source.genres)[:2]:
-                tmdb_results = self.tmdb.search(genre, 'multi')
-                candidates.extend(tmdb_results[:5])
-        elif source.source in [MediaSource.TMDB_MOVIE, MediaSource.TMDB_TV] and source.genres:
-            # If source is movie/TV, search AniList for similar genres
-            for genre in list(source.genres)[:2]:
-                anilist_results = self.anilist.search(genre)
-                candidates.extend(anilist_results[:5])
+                # Same-source genre search for primary genre
+                if genres_list:
+                    primary = genres_list[0]
+                    if source.source != MediaSource.ANILIST:
+                        tasks.append(executor.submit(self.tmdb.search, primary, 'multi', 10))
+                    tasks.append(executor.submit(self.anilist.search, primary, 10))
 
-        # Get full details for candidates that don't have genres
-        detailed_candidates = []
-        seen_ids = set()
+            # Collect results as they complete
+            for future in as_completed(tasks):
+                try:
+                    result = future.result()
+                    if result:
+                        candidates.extend(result)
+                except Exception as e:
+                    print(f"Task error: {e}")
+
+        # Deduplicate and filter
+        seen_ids = {source.id}
+        unique_candidates = []
+        needs_details = []
 
         for c in candidates:
-            if c.id == source.id or c.id in seen_ids:
+            if c.id in seen_ids:
                 continue
             seen_ids.add(c.id)
 
             if not c.genres:
-                detailed = self._get_media_details(c.id)
-                if detailed:
-                    detailed_candidates.append(detailed)
+                needs_details.append(c)
             else:
-                detailed_candidates.append(c)
+                unique_candidates.append(c)
+
+        # Fetch missing details in parallel (limit to avoid too many requests)
+        if needs_details:
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                detail_futures = {
+                    executor.submit(self._get_media_details, c.id): c
+                    for c in needs_details[:15]  # Limit to prevent too many API calls
+                }
+
+                for future in as_completed(detail_futures):
+                    try:
+                        detailed = future.result()
+                        if detailed:
+                            unique_candidates.append(detailed)
+                    except Exception:
+                        pass
 
         # Cache the candidates
-        self.cache.set_similar(source.id, detailed_candidates)
+        self.cache.set_similar(source.id, unique_candidates)
 
-        return detailed_candidates
+        return unique_candidates
 
     def get_system_info(self) -> Dict:
         """Return system information"""

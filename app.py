@@ -113,9 +113,10 @@ def search_media():
 def get_recommendations():
     """
     Get recommendations based on a media title.
-    POST: { "title": "Inception" } or { "media_id": "tmdb_movie_27205" }
+    POST: { "title": "Inception", "limit": 6, "offset": 0 }
+    or { "media_id": "tmdb_movie_27205", "limit": 6, "offset": 0 }
 
-    Returns 10 recommendations based on content similarity.
+    Returns paginated recommendations based on content similarity.
     """
     if rec_system is None:
         return jsonify({"error": "System not initialized"}), 503
@@ -124,6 +125,8 @@ def get_recommendations():
         data = request.get_json()
         title = data.get('title')
         media_id = data.get('media_id')
+        limit = data.get('limit', 6)  # Default 6 per batch
+        offset = data.get('offset', 0)
 
         if not title and not media_id:
             return jsonify({
@@ -165,10 +168,12 @@ def get_recommendations():
             # Single match - use its ID
             media_id = search_results[0].id
 
-        # Get recommendations
-        recommendations, source_media = rec_system.get_recommendations(
+        # Get recommendations with pagination
+        recommendations, source_media, total = rec_system.get_recommendations(
             title=title,
-            media_id=media_id
+            media_id=media_id,
+            num_recommendations=limit,
+            offset=offset
         )
 
         if recommendations is None or source_media is None:
@@ -185,7 +190,13 @@ def get_recommendations():
                 "year": source_media.release_year,
                 "poster_url": source_media.poster_url
             },
-            "recommendations": recommendations
+            "recommendations": recommendations,
+            "pagination": {
+                "offset": offset,
+                "limit": limit,
+                "total": total,
+                "has_more": offset + len(recommendations) < total
+            }
         })
 
     except Exception as e:

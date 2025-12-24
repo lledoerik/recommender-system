@@ -75,7 +75,7 @@ class TMDBClient(BaseAPIClient):
         )
 
     def get_details(self, media_id: str) -> Optional[Media]:
-        """Get full details including genres, keywords, cast"""
+        """Get full details including genres, keywords, cast - optimized with append_to_response"""
         parts = media_id.split('_')
         if len(parts) != 3:
             return None
@@ -83,20 +83,24 @@ class TMDBClient(BaseAPIClient):
         _, media_type, tmdb_id = parts
 
         try:
-            details = self._make_request(f'/{media_type}/{tmdb_id}')
-            credits = self._make_request(f'/{media_type}/{tmdb_id}/credits')
-            keywords_data = self._make_request(f'/{media_type}/{tmdb_id}/keywords')
+            # Single API call with append_to_response (3 calls -> 1 call)
+            details = self._make_request(
+                f'/{media_type}/{tmdb_id}',
+                {'append_to_response': 'credits,keywords'}
+            )
 
             media = self._parse_search_result(details, media_type)
 
             # Add genres
             media.genres = {g['name'] for g in details.get('genres', [])}
 
-            # Add keywords
+            # Add keywords (from appended response)
+            keywords_data = details.get('keywords', {})
             keywords_list = keywords_data.get('keywords', keywords_data.get('results', []))
             media.keywords = {k['name'] for k in keywords_list}
 
-            # Add cast (top 5)
+            # Add cast (top 5) from appended credits
+            credits = details.get('credits', {})
             cast = credits.get('cast', [])[:5]
             media.cast = [c['name'] for c in cast]
 

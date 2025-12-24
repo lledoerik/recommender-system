@@ -1,6 +1,16 @@
 // API URL - dynamic based on environment
 const API_URL = window.location.origin;
 
+// State management
+let currentState = {
+    mediaId: null,
+    offset: 0,
+    limit: 6,
+    total: 0,
+    isLoading: false,
+    source: null
+};
+
 // DOM Elements
 const form = document.getElementById('recommendForm');
 const resultsSection = document.getElementById('resultsSection');
@@ -15,6 +25,20 @@ const modalTitle = document.getElementById('modalTitle');
 const modalSubtitle = document.getElementById('modalSubtitle');
 const modalContent = document.getElementById('modalContent');
 const modalClose = document.getElementById('modalClose');
+
+// Oracle phrases for loading states
+const oraclePhrases = [
+    "L'oracle contempla els astres...",
+    "Les visions es formen en la boira...",
+    "Pitia entra en trànsit...",
+    "Els vapors d'Apol·lo revelen secrets...",
+    "L'esperit de Delfos desperta...",
+    "Les ombres del futur s'aclareixen..."
+];
+
+function getRandomPhrase() {
+    return oraclePhrases[Math.floor(Math.random() * oraclePhrases.length)];
+}
 
 // Modal functions
 function openModal(title, subtitle) {
@@ -53,9 +77,19 @@ form.addEventListener('submit', async (e) => {
     const title = mediaSearchInput.value.trim();
     if (!title) return;
 
+    // Reset state
+    currentState = {
+        mediaId: null,
+        offset: 0,
+        limit: 6,
+        total: 0,
+        isLoading: false,
+        source: null
+    };
+
     // Show loading
     resultsSection.classList.remove('hidden');
-    loadingIndicator.classList.remove('hidden');
+    showLoading();
     mediaGrid.innerHTML = '';
     resultsSection.scrollIntoView({ behavior: 'smooth' });
 
@@ -63,13 +97,13 @@ form.addEventListener('submit', async (e) => {
         const response = await fetch(`${API_URL}/api/recommendations`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title })
+            body: JSON.stringify({ title, limit: currentState.limit, offset: 0 })
         });
 
         if (response.status === 300) {
             // Multiple matches - show modal selector
             const data = await response.json();
-            loadingIndicator.classList.add('hidden');
+            hideLoading();
             resultsSection.classList.add('hidden');
             showMediaSelector(data.matches, data.query);
             return;
@@ -81,14 +115,28 @@ form.addEventListener('submit', async (e) => {
         }
 
         const data = await response.json();
-        displayResults(data.recommendations, data.source);
+        currentState.mediaId = data.source.id;
+        currentState.source = data.source;
+        currentState.total = data.pagination.total;
+        currentState.offset = data.pagination.limit;
+
+        displayResults(data.recommendations, data.source, data.pagination);
 
     } catch (error) {
         console.error('Error:', error);
-        loadingIndicator.classList.add('hidden');
+        hideLoading();
         mediaGrid.innerHTML = `<div class="error-message">${escapeHtml(error.message)}</div>`;
     }
 });
+
+function showLoading() {
+    loadingIndicator.classList.remove('hidden');
+    loadingIndicator.querySelector('p').textContent = getRandomPhrase();
+}
+
+function hideLoading() {
+    loadingIndicator.classList.add('hidden');
+}
 
 function showMediaSelector(matches, query) {
     // Open modal with options
@@ -126,8 +174,19 @@ function showMediaSelector(matches, query) {
 
             // Close modal and show loading
             closeModal();
+
+            // Reset state
+            currentState = {
+                mediaId: mediaId,
+                offset: 0,
+                limit: 6,
+                total: 0,
+                isLoading: false,
+                source: null
+            };
+
             resultsSection.classList.remove('hidden');
-            loadingIndicator.classList.remove('hidden');
+            showLoading();
             mediaGrid.innerHTML = '';
             resultsSection.scrollIntoView({ behavior: 'smooth' });
 
@@ -135,46 +194,154 @@ function showMediaSelector(matches, query) {
                 const response = await fetch(`${API_URL}/api/recommendations`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ media_id: mediaId })
+                    body: JSON.stringify({ media_id: mediaId, limit: currentState.limit, offset: 0 })
                 });
 
                 if (!response.ok) throw new Error('L\'oracle no pot respondre en aquest moment');
 
                 const data = await response.json();
-                displayResults(data.recommendations, data.source);
+                currentState.source = data.source;
+                currentState.total = data.pagination.total;
+                currentState.offset = data.pagination.limit;
+
+                displayResults(data.recommendations, data.source, data.pagination);
             } catch (error) {
-                loadingIndicator.classList.add('hidden');
+                hideLoading();
                 mediaGrid.innerHTML = `<div class="error-message">${escapeHtml(error.message)}</div>`;
             }
         });
     });
 }
 
-function displayResults(recommendations, source) {
-    loadingIndicator.classList.add('hidden');
-    mediaGrid.innerHTML = '';
+function displayResults(recommendations, source, pagination) {
+    hideLoading();
 
     if (!recommendations || recommendations.length === 0) {
         mediaGrid.innerHTML = '<div class="error-message">L\'oracle no ha tingut cap visió.</div>';
         return;
     }
 
-    resultsCount.textContent = `Visions relacionades amb "${source.title}" (${formatSource(source.source_type)})`;
+    resultsCount.innerHTML = `Visions relacionades amb "<strong>${escapeHtml(source.title)}</strong>" (${formatSource(source.source_type)})`;
 
-    recommendations.forEach(media => {
-        const card = createMediaCard(media);
+    // Add cards with staggered animation
+    recommendations.forEach((media, index) => {
+        const card = createMediaCard(media, index);
         mediaGrid.appendChild(card);
     });
+
+    // Add or update "Load more" button
+    updateLoadMoreButton(pagination);
 }
 
-function createMediaCard(media) {
+function appendResults(recommendations, pagination) {
+    hideLoading();
+
+    // Remove existing load more button before adding new cards
+    const existingBtn = document.querySelector('.load-more-container');
+    if (existingBtn) existingBtn.remove();
+
+    const startIndex = document.querySelectorAll('.media-card').length;
+
+    // Add new cards with staggered animation
+    recommendations.forEach((media, index) => {
+        const card = createMediaCard(media, index);
+        mediaGrid.appendChild(card);
+    });
+
+    // Add or update "Load more" button
+    updateLoadMoreButton(pagination);
+}
+
+function updateLoadMoreButton(pagination) {
+    // Remove existing button
+    const existingBtn = document.querySelector('.load-more-container');
+    if (existingBtn) existingBtn.remove();
+
+    if (pagination.has_more) {
+        const remaining = pagination.total - (pagination.offset + pagination.limit);
+        const container = document.createElement('div');
+        container.className = 'load-more-container';
+        container.innerHTML = `
+            <button type="button" class="btn load-more-btn" id="loadMoreBtn">
+                <span class="btn-text">Revelar més visions</span>
+                <span class="btn-count">${Math.min(remaining, currentState.limit)} més disponibles</span>
+            </button>
+            <div class="vision-progress">
+                <div class="vision-progress-bar" style="width: ${Math.round(((pagination.offset + pagination.limit) / pagination.total) * 100)}%"></div>
+            </div>
+            <span class="vision-count">${pagination.offset + pagination.limit} de ${pagination.total} visions revelades</span>
+        `;
+        mediaGrid.appendChild(container);
+
+        // Add click handler
+        document.getElementById('loadMoreBtn').addEventListener('click', loadMore);
+    } else if (pagination.total > 0) {
+        // All loaded message
+        const container = document.createElement('div');
+        container.className = 'load-more-container all-revealed';
+        container.innerHTML = `
+            <div class="oracle-complete">
+                <span class="oracle-icon">✨</span>
+                <span>L'oracle ha revelat totes les seves visions</span>
+            </div>
+        `;
+        mediaGrid.appendChild(container);
+    }
+}
+
+async function loadMore() {
+    if (currentState.isLoading || !currentState.mediaId) return;
+
+    currentState.isLoading = true;
+    const btn = document.getElementById('loadMoreBtn');
+    btn.disabled = true;
+    btn.querySelector('.btn-text').textContent = getRandomPhrase();
+    btn.classList.add('loading');
+
+    try {
+        const response = await fetch(`${API_URL}/api/recommendations`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                media_id: currentState.mediaId,
+                limit: currentState.limit,
+                offset: currentState.offset
+            })
+        });
+
+        if (!response.ok) throw new Error('L\'oracle no pot respondre');
+
+        const data = await response.json();
+        currentState.offset += data.recommendations.length;
+        currentState.total = data.pagination.total;
+
+        appendResults(data.recommendations, data.pagination);
+
+    } catch (error) {
+        console.error('Error loading more:', error);
+        btn.querySelector('.btn-text').textContent = 'Error - Torna-ho a provar';
+        btn.disabled = false;
+        btn.classList.remove('loading');
+    } finally {
+        currentState.isLoading = false;
+    }
+}
+
+function createMediaCard(media, index = 0) {
     const card = document.createElement('div');
     card.className = 'media-card';
+    card.style.setProperty('--animation-delay', `${index * 0.1}s`);
+
+    // Calculate similarity percentage for visual display
+    const similarityPercent = media.similarity ? Math.round(media.similarity * 100) : null;
 
     card.innerHTML = `
         ${media.poster_url ? `
-            <img class="media-poster" src="${media.poster_url}" alt="${escapeHtml(media.title)}" loading="lazy">
-        ` : '<div class="media-poster-placeholder"></div>'}
+            <div class="poster-container">
+                <img class="media-poster" src="${media.poster_url}" alt="${escapeHtml(media.title)}" loading="lazy">
+                ${similarityPercent ? `<div class="similarity-badge">${similarityPercent}%</div>` : ''}
+            </div>
+        ` : `<div class="media-poster-placeholder">${similarityPercent ? `<div class="similarity-badge">${similarityPercent}%</div>` : ''}</div>`}
         <div class="media-content">
             <div class="media-title">${escapeHtml(media.title)}</div>
             <div class="media-meta">
