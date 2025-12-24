@@ -2,6 +2,7 @@ from typing import List, Optional, Tuple, Dict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import sys
 import re
+import json
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -26,6 +27,32 @@ class MediaRecommendationSystem:
         self.anilist = AniListClient()
         self.cache = MediaCache()
         self.similarity = ContentSimilarity()
+        self.cross_media_links = self._load_cross_media_links()
+
+    def _load_cross_media_links(self) -> Dict[str, str]:
+        """
+        Load manual cross-media links from JSON file.
+        Returns a dict mapping media_id -> linked_media_id (bidirectional).
+        """
+        links_file = Path(__file__).parent.parent / 'data' / 'cross_media_links.json'
+        links_map = {}
+
+        try:
+            if links_file.exists():
+                with open(links_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+
+                for link in data.get('links', []):
+                    tmdb_id = link.get('tmdb')
+                    anilist_id = link.get('anilist')
+                    if tmdb_id and anilist_id:
+                        # Bidirectional mapping
+                        links_map[tmdb_id] = anilist_id
+                        links_map[anilist_id] = tmdb_id
+        except Exception as e:
+            print(f"Error loading cross-media links: {e}")
+
+        return links_map
 
     def search(self, query: str, source: str = 'all') -> List[Media]:
         """
@@ -181,30 +208,32 @@ class MediaRecommendationSystem:
             elif source.source == MediaSource.ANILIST:
                 tasks.append(executor.submit(self.anilist.get_similar, source, 20))
 
-            # Strategy 2 & 3: Genre-based searches (parallel)
+            # Strategy 2: Same-source genre-based searches (NO cross-source by default)
             if source.genres:
                 genres_list = list(source.genres)[:2]
 
                 for genre in genres_list:
-                    # Cross-source searches
+                    # Same-source searches ONLY - respect content type
                     if source.source == MediaSource.ANILIST:
-                        tasks.append(executor.submit(self.tmdb.search, genre, 'multi', 8))
+                        tasks.append(executor.submit(self.anilist.search, genre, 10))
                     else:
-                        tasks.append(executor.submit(self.anilist.search, genre, 8))
+                        tasks.append(executor.submit(self.tmdb.search, genre, 'multi', 10))
 
-                # Same-source genre search for primary genre
-                if genres_list:
-                    primary = genres_list[0]
-                    if source.source != MediaSource.ANILIST:
-                        tasks.append(executor.submit(self.tmdb.search, primary, 'multi', 10))
-                    tasks.append(executor.submit(self.anilist.search, primary, 10))
+            # Strategy 3: Add manually linked cross-media items (special cases)
+            linked_id = self.cross_media_links.get(source.id)
+            if linked_id:
+                tasks.append(executor.submit(self._get_media_details, linked_id))
 
             # Collect results as they complete
             for future in as_completed(tasks):
                 try:
                     result = future.result()
                     if result:
-                        candidates.extend(result)
+                        if isinstance(result, list):
+                            candidates.extend(result)
+                        elif isinstance(result, Media):
+                            # Single media from cross-media link
+                            candidates.append(result)
                 except Exception as e:
                     print(f"Task error: {e}")
 
