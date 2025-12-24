@@ -16,7 +16,7 @@ class AniListClient(BaseAPIClient):
     SEARCH_QUERY = '''
     query ($search: String, $page: Int, $perPage: Int) {
         Page(page: $page, perPage: $perPage) {
-            media(search: $search, type: ANIME, sort: POPULARITY_DESC) {
+            media(search: $search, type: ANIME, sort: POPULARITY_DESC, isAdult: false) {
                 id
                 title { romaji english native }
                 description
@@ -29,6 +29,7 @@ class AniListClient(BaseAPIClient):
                 studios { nodes { name } }
                 episodes
                 season
+                isAdult
             }
         }
     }
@@ -49,7 +50,8 @@ class AniListClient(BaseAPIClient):
             studios { nodes { name } }
             episodes
             season
-            recommendations(sort: RATING_DESC, perPage: 20) {
+            isAdult
+            recommendations(sort: RATING_DESC, perPage: 25) {
                 nodes {
                     mediaRecommendation {
                         id
@@ -64,6 +66,7 @@ class AniListClient(BaseAPIClient):
                         episodes
                         season
                         popularity
+                        isAdult
                     }
                 }
             }
@@ -97,6 +100,9 @@ class AniListClient(BaseAPIClient):
 
             results = []
             for item in data.get('data', {}).get('Page', {}).get('media', []):
+                # Skip adult content
+                if item.get('isAdult'):
+                    continue
                 results.append(self._parse_result(item))
 
             return results
@@ -165,10 +171,12 @@ class AniListClient(BaseAPIClient):
             )
 
             results = []
-            for rec in recommendations[:limit]:
+            for rec in recommendations:
                 rec_media = rec.get('mediaRecommendation')
-                if rec_media:
+                if rec_media and not rec_media.get('isAdult'):
                     results.append(self._parse_result(rec_media))
+                    if len(results) >= limit:
+                        break
 
             return results
 

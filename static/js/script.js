@@ -263,8 +263,8 @@ function updateLoadMoreButton(pagination) {
         container.className = 'load-more-container';
         container.innerHTML = `
             <button type="button" class="btn load-more-btn" id="loadMoreBtn">
-                <span class="btn-text">Revelar més visions</span>
-                <span class="btn-count">${Math.min(remaining, currentState.limit)} més disponibles</span>
+                <span class="btn-text">Revelar totes les visions</span>
+                <span class="btn-count">${remaining} més disponibles</span>
             </button>
             <div class="vision-progress">
                 <div class="vision-progress-bar" style="width: ${Math.round(((pagination.offset + pagination.limit) / pagination.total) * 100)}%"></div>
@@ -298,13 +298,16 @@ async function loadMore() {
     btn.querySelector('.btn-text').textContent = getRandomPhrase();
     btn.classList.add('loading');
 
+    // Calculate remaining items and request all of them
+    const remaining = currentState.total - currentState.offset;
+
     try {
         const response = await fetch(`${API_URL}/api/recommendations`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 media_id: currentState.mediaId,
-                limit: currentState.limit,
+                limit: remaining,  // Request all remaining items
                 offset: currentState.offset
             })
         });

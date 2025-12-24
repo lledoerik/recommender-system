@@ -1,6 +1,7 @@
 from typing import List, Optional, Tuple, Dict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import sys
+import re
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -60,7 +61,23 @@ class MediaRecommendationSystem:
         # Sort by popularity
         results.sort(key=lambda x: x.popularity or 0, reverse=True)
 
-        return results[:20]
+        # Deduplicate: prefer AniList for anime over TMDB TV
+        def normalize(t):
+            return re.sub(r'[^a-z0-9]', '', (t or '').lower())
+
+        seen_titles = set()
+        deduplicated = []
+
+        for r in results:
+            norm = normalize(r.title)
+            # If TMDB TV and title already seen (from AniList), skip
+            if r.source == MediaSource.TMDB_TV and norm in seen_titles:
+                continue
+            if norm not in seen_titles:
+                seen_titles.add(norm)
+                deduplicated.append(r)
+
+        return deduplicated[:20]
 
     def get_recommendations(
         self,
@@ -193,13 +210,43 @@ class MediaRecommendationSystem:
 
         # Deduplicate and filter
         seen_ids = {source.id}
+        seen_titles = set()  # Track normalized titles to avoid anime duplicates
         unique_candidates = []
         needs_details = []
+
+        def normalize_title(title: str) -> str:
+            """Normalize title for comparison (lowercase, remove special chars)"""
+            if not title:
+                return ""
+            return re.sub(r'[^a-z0-9]', '', title.lower())
+
+        # Add source title to seen titles
+        seen_titles.add(normalize_title(source.title))
+        if source.original_title:
+            seen_titles.add(normalize_title(source.original_title))
 
         for c in candidates:
             if c.id in seen_ids:
                 continue
+
+            # Check for title duplicates (anime appearing in both TMDB and AniList)
+            norm_title = normalize_title(c.title)
+            norm_orig = normalize_title(c.original_title) if c.original_title else ""
+
+            # If this is a TMDB TV show and the title matches an anime, skip it
+            if c.source == MediaSource.TMDB_TV:
+                if norm_title in seen_titles or (norm_orig and norm_orig in seen_titles):
+                    continue
+
+            # Skip if we've seen this exact title before (prefer AniList for anime)
+            if norm_title in seen_titles:
+                # Only skip if it's the same type of content
+                continue
+
             seen_ids.add(c.id)
+            seen_titles.add(norm_title)
+            if norm_orig:
+                seen_titles.add(norm_orig)
 
             if not c.genres:
                 needs_details.append(c)
